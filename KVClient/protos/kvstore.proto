@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package kvstore;
+
+// KV Store Service - High performance key-value storage service
+service KVStoreService {
+  // Lookup operation - finds cached blocks matching the token sequence
+  rpc Lookup(LookupRequest) returns (LookupResponse);
+  
+  // Read operation - retrieves a chunk by location
+  rpc Read(ReadRequest) returns (ReadResponse);
+  
+  // Write operation - stores a new chunk
+  rpc Write(WriteRequest) returns (WriteResponse);
+}
+
+// Request for Lookup operation
+message LookupRequest {
+  // Azure Storage account URL (e.g., "https://account.blob.core.windows.net")
+  string account_url = 1;
+  
+  // Container name for this account
+  string container_name = 2;
+  
+  // Partition key for the lookup
+  string partition_key = 3;
+  
+  // Completion/run identifier for logging and tracking
+  string completion_id = 4;
+  
+  // Token sequence to lookup
+  repeated int64 tokens = 5;
+  
+  // Optional: precomputed hash values for the tokens
+  repeated uint64 precomputed_hashes = 6;
+}
+
+// Response for Lookup operation
+message LookupResponse {
+  // Number of blocks found in cache
+  int32 cached_blocks = 1;
+  
+  // Hash value of the last cached block
+  uint64 last_hash = 2;
+  
+  // Locations of cached blocks
+  repeated BlockLocation locations = 3;
+  
+  // Error message if operation failed
+  string error = 4;
+  
+  // Success status
+  bool success = 5;
+}
+
+// Block location information
+message BlockLocation {
+  // Hash of the block
+  uint64 hash = 1;
+  
+  // Location string (blob name or GUID)
+  string location = 2;
+}
+
+// Request for Read operation
+message ReadRequest {
+  // Azure Storage account URL
+  string account_url = 1;
+  
+  // Container name
+  string container_name = 2;
+  
+  // Location to read from (from Lookup response)
+  string location = 3;
+  
+  // Optional: completion ID for logging
+  string completion_id = 4;
+}
+
+// Response for Read operation
+message ReadResponse {
+  // Whether the read was successful
+  bool found = 1;
+  
+  // The prompt chunk data
+  PromptChunk chunk = 2;
+  
+  // Error message if operation failed
+  string error = 3;
+  
+  // Success status
+  bool success = 4;
+}
+
+// Prompt chunk data
+message PromptChunk {
+  // Hash of the chunk
+  uint64 hash = 1;
+  
+  // Partition key
+  string partition_key = 2;
+  
+  // Parent hash
+  uint64 parent_hash = 3;
+  
+  // Binary buffer data
+  bytes buffer = 4;
+  
+  // Token sequence
+  repeated int64 tokens = 5;
+  
+  // Completion ID
+  string completion_id = 6;
+}
+
+// Request for Write operation
+message WriteRequest {
+  // Azure Storage account URL
+  string account_url = 1;
+  
+  // Container name
+  string container_name = 2;
+  
+  // The chunk to write
+  PromptChunk chunk = 3;
+}
+
+// Response for Write operation
+message WriteResponse {
+  // Success status
+  bool success = 1;
+  
+  // Error message if operation failed
+  string error = 2;
+}

@@ -1,0 +1,18 @@
+# Conversation Template for KVPlayground
+# Lines starting with # are comments
+# Each non-empty, non-comment line is a user prompt
+# The system will process them one by one
+
+You are an helpful assistant help us create a plan to solve the following problem. {{task}} We have collected the following facts so far. {{facts}} You have following team at your disposal. Your team: {{team}} You are also provided additional domain specific instructions: {{instructions}} Please understand their individual capability and based on that provide a nice plan for us. You do not have to directly interact with your team. You just output the plan in the form of short bulletin we will pass it to executors. Based on the team composition, and known and unknown facts, please devise a short bullet-point plan for addressing the original request → . Remember, there is no requirement to involve all team members -- a team member's particular expertise may not be needed for this task. Your task is complete once you have devised the plan. You are not allowed to execute the plan.
+
+What are the key factors driving tech stocks?
+
+How does MSFT compare to AAPL?
+
+What about TSLA
+
+Can you explain the P/E ratio?
+
+What's the current market sentiment for cloud computing stocks?
+
+What's the current market sentiment for nuclear energy stocks in relation to AI?
