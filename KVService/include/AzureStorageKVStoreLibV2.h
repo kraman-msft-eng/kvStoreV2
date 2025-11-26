@@ -8,7 +8,6 @@
 #include <future>
 #include <functional>
 #include "KVTypes.h"
-#include "BloomFilter.h"
 #include <azure/storage/blobs.hpp>
 #include <memory>
 #include <sstream>

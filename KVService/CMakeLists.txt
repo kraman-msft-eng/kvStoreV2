@@ -95,7 +95,6 @@ add_custom_command(
 # KV Store Library V2 (using local files)
 add_library(AzureStorageKVStoreLibV2
     ${CMAKE_CURRENT_SOURCE_DIR}/src/AzureStorageKVStoreLibV2.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/BloomFilter.cpp
 )
 
 target_include_directories(AzureStorageKVStoreLibV2 PUBLIC
@@ -195,30 +194,8 @@ target_compile_options(KVStoreServer PRIVATE
     $<$<CONFIG:Debug>:/MTd>
 )
 
-# Test client executable
-add_executable(KVStoreClient
-    src/client_test.cpp
-    ${PROTO_SRCS}
-    ${GRPC_SRCS}
-)
-
-target_include_directories(KVStoreClient PRIVATE
-    ${PROTO_SRC_DIR}
-)
-
-target_link_libraries(KVStoreClient PRIVATE
-    gRPC::grpc++
-    protobuf::libprotobuf
-)
-
-# Force static runtime to match vcpkg libraries
-target_compile_options(KVStoreClient PRIVATE
-    $<$<CONFIG:Release>:/MT>
-    $<$<CONFIG:Debug>:/MTd>
-)
-
 # Install targets
-install(TARGETS KVStoreServer KVStoreClient
+install(TARGETS KVStoreServer
     RUNTIME DESTINATION bin
 )
 

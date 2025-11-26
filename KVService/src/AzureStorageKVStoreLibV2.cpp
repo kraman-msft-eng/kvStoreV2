@@ -1,5 +1,4 @@
 #include "AzureStorageKVStoreLibV2.h"
-#include "BloomFilter.h"
 #include <future>
 #include <azure/storage/blobs.hpp>
 #include <azure/identity/default_azure_credential.hpp>
