@@ -31,16 +31,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "Building KVStoreClient..." -ForegroundColor Green
-& $cmakePath --build build --config Release --target KVStoreClient
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Client build failed!" -ForegroundColor Red
-    exit 1
-}
-
-Write-Host ""
 Write-Host "===== Build Successful =====" -ForegroundColor Cyan
 Write-Host "Features enabled: Multi-NIC, Custom curl options" -ForegroundColor Green
 Write-Host "Server: build/Release/KVStoreServer.exe" -ForegroundColor Green
-Write-Host "Client: build/Release/KVStoreClient.exe" -ForegroundColor Green
