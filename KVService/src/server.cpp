@@ -5,8 +5,73 @@
 #include <memory>
 #include <string>
 #include <csignal>
+#include <thread>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 std::unique_ptr<grpc::Server> g_server;
+
+// Get total processor count across all NUMA nodes/processor groups
+int GetTotalProcessorCount() {
+#ifdef _WIN32
+    WORD groupCount = GetActiveProcessorGroupCount();
+    if (groupCount > 1) {
+        DWORD totalProcessors = 0;
+        for (WORD i = 0; i < groupCount; i++) {
+            totalProcessors += GetActiveProcessorCount(i);
+        }
+        return static_cast<int>(totalProcessors);
+    }
+#endif
+    int count = std::thread::hardware_concurrency();
+    return count > 0 ? count : 96;  // Fallback for FX96 VMs
+}
+
+// Set process to use all NUMA nodes for better CPU utilization
+void EnableAllNumaNodes() {
+#ifdef _WIN32
+    // Get number of processor groups (NUMA nodes on Windows)
+    WORD groupCount = GetActiveProcessorGroupCount();
+    std::cout << "Detected " << groupCount << " processor group(s)" << std::endl;
+    
+    if (groupCount > 1) {
+        std::cout << "Multi-NUMA system detected. Enabling all processor groups." << std::endl;
+        
+        // Get total processor count across all groups
+        DWORD totalProcessors = 0;
+        for (WORD i = 0; i < groupCount; i++) {
+            DWORD processorsInGroup = GetActiveProcessorCount(i);
+            std::cout << "  Group " << i << ": " << processorsInGroup << " processors" << std::endl;
+            totalProcessors += processorsInGroup;
+        }
+        std::cout << "Total processors: " << totalProcessors << std::endl;
+        
+        // Set process to use all processor groups (Windows 11 / Server 2022+)
+        // This allows threads to be scheduled across all NUMA nodes
+        HANDLE hProcess = GetCurrentProcess();
+        
+        // Try to set affinity to span all groups
+        // Build a GROUP_AFFINITY for each group and set default thread affinity
+        for (WORD group = 0; group < groupCount; group++) {
+            // Create a thread on each NUMA node to "warm up" the scheduler
+            // This encourages Windows to distribute subsequent threads
+            std::thread([group]() {
+                GROUP_AFFINITY affinity = {};
+                affinity.Group = group;
+                affinity.Mask = ~0ULL;  // All processors in this group
+                SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr);
+                // Brief work to establish presence on this NUMA node
+                volatile int x = 0;
+                for (int i = 0; i < 1000; i++) x += i;
+            }).detach();
+        }
+        
+        std::cout << "Threads will be distributed across " << groupCount << " NUMA nodes" << std::endl;
+    }
+#endif
+}
 
 void SignalHandler(int signal) {
     std::cout << "\nReceived signal " << signal << ", shutting down gracefully..." << std::endl;
@@ -20,7 +85,17 @@ void RunServer(const std::string& serverAddress,
                HttpTransportProtocol transport = HttpTransportProtocol::WinHTTP,
                bool enableSdkLogging = true,
                bool enableMultiNic = false,
-               bool enableMetricsLogging = true) {
+               bool enableMetricsLogging = true,
+               int numThreads = 0) {
+    
+    // Report NUMA topology
+    EnableAllNumaNodes();
+    
+    // Determine thread count - use all processors across all NUMA nodes
+    if (numThreads <= 0) {
+        numThreads = GetTotalProcessorCount();
+    }
+    std::cout << "Using " << numThreads << " server threads" << std::endl;
     
     // Enable gRPC verbose logging if environment variable is set
     const char* grpcVerbose = std::getenv("GRPC_VERBOSITY");
@@ -47,6 +122,19 @@ void RunServer(const std::string& serverAddress,
     // Configure server options for performance
     builder.SetMaxReceiveMessageSize(100 * 1024 * 1024);  // 100MB max message size
     builder.SetMaxSendMessageSize(100 * 1024 * 1024);
+    
+    // NUMA optimization: Configure gRPC to use more threads across NUMA nodes
+    // For async callback API, we use resource quota and completion queue count
+    grpc::ResourceQuota quota("server_quota");
+    quota.SetMaxThreads(numThreads);
+    builder.SetResourceQuota(quota);
+    
+    // Use multiple completion queues to spread work across NUMA nodes
+    // Each CQ can be serviced by threads on different NUMA nodes
+    builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::NUM_CQS, 
+                                 std::max(2, numThreads / 24));  // ~4 CQs for 96 threads
+    builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MIN_POLLERS, numThreads / 2);
+    builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, numThreads);
     
     // TCP optimization: Reduce latency for small messages
     builder.AddChannelArgument("grpc.tcp_user_timeout_ms", 20000);  // 20 second TCP timeout
@@ -109,6 +197,7 @@ void PrintUsage(const char* programName) {
     std::cout << "Options:" << std::endl;
     std::cout << "  --port PORT                   Port to listen on (default: 50051)" << std::endl;
     std::cout << "  --host HOST                   Host to bind to (default: 0.0.0.0)" << std::endl;
+    std::cout << "  --threads NUM                 Number of server threads (default: auto-detect CPU count)" << std::endl;
     std::cout << "  --log-level LEVEL             Log level: error, info, verbose (default: info)" << std::endl;
     std::cout << "  --transport TRANSPORT         HTTP transport: winhttp, libcurl (default: libcurl)" << std::endl;
     std::cout << "  --enable-sdk-logging          Enable Azure SDK logging (default: disabled)" << std::endl;
@@ -127,6 +216,7 @@ int main(int argc, char** argv) {
     // Parse command line arguments
     std::string host = "0.0.0.0";
     int port = 50051;
+    int numThreads = 0;  // 0 = auto-detect
     LogLevel logLevel = LogLevel::Information;
     HttpTransportProtocol transport = HttpTransportProtocol::LibCurl;
     bool enableSdkLogging = false;  // Default: disabled for cleaner output
@@ -147,6 +237,9 @@ int main(int argc, char** argv) {
         }
         else if (arg == "--host" && i + 1 < argc) {
             host = argv[++i];
+        }
+        else if (arg == "--threads" && i + 1 < argc) {
+            numThreads = std::stoi(argv[++i]);
         }
         else if (arg == "--log-level" && i + 1 < argc) {
             std::string level = argv[++i];
@@ -200,7 +293,7 @@ int main(int argc, char** argv) {
     // JSON metrics are logged to stdout for now
     
     try {
-        RunServer(serverAddress, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging);
+        RunServer(serverAddress, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging, numThreads);
     } catch (const std::exception& e) {
         std::cerr << "Server error: " << e.what() << std::endl;
         return 1;

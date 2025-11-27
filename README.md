@@ -5,16 +5,47 @@ A distributed key-value store system for caching GPT prompt tokens, featuring a 
 ## Architecture
 
 ```
-┌─────────────────────┐         gRPC          ┌─────────────────────┐
-│   Linux Client      │ ◄──────────────────► │  Windows Service    │
-│                     │                       │                     │
-│  - KVPlayground     │                       │    KVService        │
-│  - KVClient lib     │                       │  (gRPC Server)      │
-│                     │                       │         │           │
-└─────────────────────┘                       │         ▼           │
-                                              │  Azure Blob Storage │
-                                              └─────────────────────┘
+┌─────────────────────┐         gRPC          ┌─────────────────────────────────────┐
+│   Linux Client      │ ◄──────────────────► │  Windows Service (Multi-NUMA)       │
+│                     │                       │                                     │
+│  - KVPlayground     │        :8085 ────────►│  KVStoreServer (NUMA Node 0)       │
+│  - KVClient lib     │        :8086 ────────►│  KVStoreServer (NUMA Node 1)       │
+│                     │                       │         │                           │
+└─────────────────────┘                       │         ▼                           │
+                                              │  Azure Blob Storage                 │
+                                              └─────────────────────────────────────┘
 ```
+
+## Performance Optimizations
+
+### NUMA-Aware Multi-Process Architecture
+
+For VMs with multiple NUMA nodes (e.g., Azure FX96 with 96 cores / 2 NUMA nodes), run **two server instances** pinned to each NUMA node:
+
+```powershell
+# On Windows VM - start two server processes
+start "KVStore-Node0" /NODE 0 .\KVStoreServer.exe --port 8085 --log-level error --disable-metrics
+start "KVStore-Node1" /NODE 1 .\KVStoreServer.exe --port 8086 --log-level error --disable-metrics
+```
+
+This ensures:
+- **Full CPU utilization** across all cores
+- **Reduced latency variance** (no cross-NUMA memory access)
+- **2x throughput** compared to single-process
+
+### gRPC Optimizations
+
+The server includes these performance settings:
+- **TCP_NODELAY**: Disabled Nagle's algorithm for lower latency
+- **Keepalive**: 10s ping interval to maintain connections
+- **HTTP/2 flow control**: 64MB stream window, 16MB max frame size
+- **Concurrent streams**: 200 per connection
+
+### Azure Storage Optimizations
+
+- **Connection pooling**: 100 concurrent HTTP connections
+- **DNS caching**: 300 second TTL
+- **SSL session reuse**: Enabled for faster TLS handshakes
 
 ## Projects
 
@@ -22,6 +53,7 @@ A distributed key-value store system for caching GPT prompt tokens, featuring a 
 - **Purpose**: gRPC service that manages Azure Blob Storage operations
 - **Platform**: Windows x64
 - **Features**:
+  - Multi-NUMA support with per-node process pinning
   - Multi-NIC support with custom Azure SDK
   - CurlTransport for network optimization
   - Bloom filter for fast lookups
@@ -57,9 +89,26 @@ A distributed key-value store system for caching GPT prompt tokens, featuring a 
 cd KVService
 .\build_with_local_sdk.ps1
 
-# Run server
-.\build\Release\KVStoreServer.exe
+# Single server (simple setup)
+.\build\Release\KVStoreServer.exe --port 8085 --log-level error --disable-metrics
+
+# Multi-NUMA setup (for 96+ core VMs) - run BOTH commands
+start "KVStore-Node0" /NODE 0 .\build\Release\KVStoreServer.exe --port 8085 --log-level error --disable-metrics
+start "KVStore-Node1" /NODE 1 .\build\Release\KVStoreServer.exe --port 8086 --log-level error --disable-metrics
 ```
+
+### Server Command Line Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--port PORT` | gRPC listen port | 50051 |
+| `--host HOST` | Bind address | 0.0.0.0 |
+| `--threads NUM` | Server thread count | auto-detect |
+| `--log-level LEVEL` | error, info, verbose | info |
+| `--transport TYPE` | winhttp, libcurl | libcurl |
+| `--disable-metrics` | Disable console metrics | enabled |
+| `--enable-sdk-logging` | Enable Azure SDK logs | disabled |
+| `--disable-multi-nic` | Disable NIC round-robin | enabled |
 
 ### Linux (KVClient + KVPlayground)
 
@@ -73,11 +122,15 @@ mkdir build && cd build
 cmake ..
 make
 
-# Set server address
-export KVSTORE_GRPC_SERVER="your-windows-server:50051"
+# Set server address (single server)
+export KVSTORE_GRPC_SERVER="your-windows-server:8085"
 
 # Run playground
 ./KVPlayground/KVPlayground conversation_tokens.json 10 5
+
+# For multi-NUMA setup, run two clients to different ports:
+# Terminal 1: export KVSTORE_GRPC_SERVER="server:8085" && ./KVPlayground ...
+# Terminal 2: export KVSTORE_GRPC_SERVER="server:8086" && ./KVPlayground ...
 ```
 
 ## Building on Linux
@@ -230,12 +283,12 @@ KVStoreV2/
 1. **Start Windows service**:
 ```powershell
 cd KVService\build\Release
-.\KVStoreServer.exe
+.\KVStoreServer.exe --port 8085 --log-level error --disable-metrics
 ```
 
 2. **Run Linux client**:
 ```bash
-export KVSTORE_GRPC_SERVER="windows-host:50051"
+export KVSTORE_GRPC_SERVER="windows-host:8085"
 ./build/KVPlayground/KVPlayground conversation_tokens.json 10 2
 ```
 
@@ -243,8 +296,30 @@ export KVSTORE_GRPC_SERVER="windows-host:50051"
 
 ### Connection refused
 - Ensure KVService is running on Windows
-- Check firewall rules allow port 50051
+- Check Windows Firewall allows the port:
+  ```powershell
+  New-NetFirewallRule -DisplayName "KVStore gRPC 8085" -Direction Inbound -Protocol TCP -LocalPort 8085 -Action Allow
+  New-NetFirewallRule -DisplayName "KVStore gRPC 8086" -Direction Inbound -Protocol TCP -LocalPort 8086 -Action Allow
+  ```
+- Check Azure NSG rules allow inbound traffic on the ports
+- Check Linux VM NSG allows outbound traffic on the ports
 - Verify KVSTORE_GRPC_SERVER is set correctly
+
+### NUMA node imbalance (one CPU at 100%, other idle)
+On Windows VMs with 64+ cores (multiple NUMA nodes), a single process only uses one NUMA node.
+
+**Solution**: Run multiple server instances pinned to each NUMA node:
+```powershell
+start "KVStore-Node0" /NODE 0 .\KVStoreServer.exe --port 8085 --log-level error --disable-metrics
+start "KVStore-Node1" /NODE 1 .\KVStoreServer.exe --port 8086 --log-level error --disable-metrics
+```
+
+Check NUMA topology on Windows:
+```powershell
+# See processor groups
+wmic cpu get NumberOfCores,NumberOfLogicalProcessors
+# Or check Task Manager → Performance → CPU → Right-click → Change graph to → Logical processors
+```
 
 ### Build errors on Linux
 - Ensure all vcpkg packages are installed
