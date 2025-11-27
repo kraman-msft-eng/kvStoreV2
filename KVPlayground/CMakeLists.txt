@@ -38,10 +38,13 @@ set_target_properties(KVPlayground PROPERTIES
     CXX_EXTENSIONS NO
 )
 
-# Copy chunk.bin to output directory after build
+# Copy chunk.bin and conversation_tokens.json to output directory after build
 add_custom_command(TARGET KVPlayground POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_CURRENT_SOURCE_DIR}/chunk.bin
         $<TARGET_FILE_DIR:KVPlayground>/chunk.bin
-    COMMENT "Copying chunk.bin to output directory"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/conversation_tokens.json
+        $<TARGET_FILE_DIR:KVPlayground>/conversation_tokens.json
+    COMMENT "Copying chunk.bin and conversation_tokens.json to output directory"
 )

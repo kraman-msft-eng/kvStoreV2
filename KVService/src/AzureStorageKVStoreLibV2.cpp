@@ -363,7 +363,7 @@ bool AzureStorageKVStoreLibV2::Initialize(const std::string& accountUrl, const s
             // Connection Pooling & Reuse
             curlOptions.HttpKeepAlive = true;
             curlOptions.EnableCurlSslCaching = true;
-            curlOptions.MaxConnectionsCache = 1;
+            curlOptions.MaxConnectionsCache = 100;  // Allow 100 concurrent connections for parallel reads
             curlOptions.DnsCacheTimeout = 300;
 #endif
             

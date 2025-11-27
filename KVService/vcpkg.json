@@ -10,7 +10,8 @@
     "azure-storage-blobs-cpp",
     "azure-identity-cpp",
     "grpc",
-    "protobuf"
+    "protobuf",
+    "opentelemetry-cpp"
   ],
   "builtin-baseline": "73af4de996897cb45dcf5034d16a551a3cf476f7"
 }

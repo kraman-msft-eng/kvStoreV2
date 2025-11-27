@@ -12,6 +12,10 @@ service KVStoreService {
   
   // Write operation - stores a new chunk
   rpc Write(WriteRequest) returns (WriteResponse);
+  
+  // Streaming Read operation - retrieves multiple chunks with reduced latency
+  // Uses bidirectional streaming to pipeline requests and responses
+  rpc StreamingRead(stream ReadRequest) returns (stream ReadResponse);
 }
 
 // Request for Lookup operation
@@ -51,6 +55,9 @@ message LookupResponse {
   
   // Success status
   bool success = 5;
+  
+  // Server-side performance metrics
+  ServerMetrics server_metrics = 6;
 }
 
 // Block location information
@@ -60,6 +67,18 @@ message BlockLocation {
   
   // Location string (blob name or GUID)
   string location = 2;
+}
+
+// Server-side performance metrics
+message ServerMetrics {
+  // Storage layer latency in microseconds
+  int64 storage_latency_us = 1;
+  
+  // Total server-side latency in microseconds (including gRPC overhead)
+  int64 total_latency_us = 2;
+  
+  // Server-side overhead in microseconds (total - storage)
+  int64 overhead_us = 3;
 }
 
 // Request for Read operation
@@ -90,6 +109,9 @@ message ReadResponse {
   
   // Success status
   bool success = 4;
+  
+  // Server-side performance metrics
+  ServerMetrics server_metrics = 5;
 }
 
 // Prompt chunk data
@@ -132,4 +154,7 @@ message WriteResponse {
   
   // Error message if operation failed
   string error = 2;
+  
+  // Server-side performance metrics
+  ServerMetrics server_metrics = 3;
 }

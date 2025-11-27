@@ -39,13 +39,44 @@ struct PrecomputedPrompt {
 
 // Performance statistics for operations
 struct OperationStats {
+    // Client-side E2E measurements (includes network RTT)
     std::vector<int64_t> lookupTimes;  // microseconds
     std::vector<int64_t> readTimes;    // microseconds
     std::vector<int64_t> writeTimes;   // microseconds
     
+    // Server-side measurements (from JSON metrics)
+    std::vector<int64_t> lookupStorageTimes;   // server storage latency
+    std::vector<int64_t> lookupServerTotalTimes; // server total latency
+    std::vector<int64_t> readStorageTimes;
+    std::vector<int64_t> readServerTotalTimes;
+    std::vector<int64_t> writeStorageTimes;
+    std::vector<int64_t> writeServerTotalTimes;
+    
     void addLookupTime(int64_t us) { lookupTimes.push_back(us); }
     void addReadTime(int64_t us) { readTimes.push_back(us); }
     void addWriteTime(int64_t us) { writeTimes.push_back(us); }
+    
+    void addLookupServerMetrics(const ServerMetrics& m) {
+        // Only add if we got valid server metrics (non-zero total latency)
+        if (m.total_latency_us > 0) {
+            lookupStorageTimes.push_back(m.storage_latency_us);
+            lookupServerTotalTimes.push_back(m.total_latency_us);
+        }
+    }
+    void addReadServerMetrics(const ServerMetrics& m) {
+        // Only add if we got valid server metrics (non-zero total latency)
+        if (m.total_latency_us > 0) {
+            readStorageTimes.push_back(m.storage_latency_us);
+            readServerTotalTimes.push_back(m.total_latency_us);
+        }
+    }
+    void addWriteServerMetrics(const ServerMetrics& m) {
+        // Only add if we got valid server metrics (non-zero total latency)
+        if (m.total_latency_us > 0) {
+            writeStorageTimes.push_back(m.storage_latency_us);
+            writeServerTotalTimes.push_back(m.total_latency_us);
+        }
+    }
     
     int64_t getPercentile(const std::vector<int64_t>& data, double percentile) const {
         if (data.empty()) return 0;
@@ -56,10 +87,94 @@ struct OperationStats {
         return sorted[index];
     }
     
+    void displayDetailedStats() const {
+        std::cout << "\n=== Performance Statistics (Latency in milliseconds) ===\n";
+        
+        // Display function for Lookup and Write (full metrics)
+        auto displayFullOp = [this](const char* name, 
+                                const std::vector<int64_t>& e2e,
+                                const std::vector<int64_t>& storage,
+                                const std::vector<int64_t>& serverTotal) {
+            if (e2e.empty()) return;
+            
+            int64_t e2eP50 = getPercentile(e2e, 50);
+            int64_t e2eP90 = getPercentile(e2e, 90);
+            int64_t e2eP99 = getPercentile(e2e, 99);
+            
+            std::cout << "\n" << name << " (" << e2e.size() << " operations):\n";
+            std::cout << "  Client E2E:      p50=" << (e2eP50 / 1000.0) << "ms, "
+                      << "p90=" << (e2eP90 / 1000.0) << "ms, "
+                      << "p99=" << (e2eP99 / 1000.0) << "ms\n";
+            
+            if (!storage.empty() && !serverTotal.empty()) {
+                int64_t storageP50 = getPercentile(storage, 50);
+                int64_t storageP90 = getPercentile(storage, 90);
+                int64_t storageP99 = getPercentile(storage, 99);
+                int64_t serverTotalP50 = getPercentile(serverTotal, 50);
+                int64_t serverTotalP90 = getPercentile(serverTotal, 90);
+                int64_t serverTotalP99 = getPercentile(serverTotal, 99);
+                
+                std::cout << "  Server Storage:  p50=" << (storageP50 / 1000.0) << "ms, "
+                          << "p90=" << (storageP90 / 1000.0) << "ms, "
+                          << "p99=" << (storageP99 / 1000.0) << "ms\n";
+                std::cout << "  Server Total:    p50=" << (serverTotalP50 / 1000.0) << "ms, "
+                          << "p90=" << (serverTotalP90 / 1000.0) << "ms, "
+                          << "p99=" << (serverTotalP99 / 1000.0) << "ms\n";
+                std::cout << "  Server Overhead: p50=" << ((serverTotalP50 - storageP50) / 1000.0) << "ms, "
+                          << "p90=" << ((serverTotalP90 - storageP90) / 1000.0) << "ms, "
+                          << "p99=" << ((serverTotalP99 - storageP99) / 1000.0) << "ms\n";
+                std::cout << "  Network RTT:     p50=" << ((e2eP50 - serverTotalP50) / 1000.0) << "ms, "
+                          << "p90=" << ((e2eP90 - serverTotalP90) / 1000.0) << "ms, "
+                          << "p99=" << ((e2eP99 - serverTotalP99) / 1000.0) << "ms\n";
+            }
+        };
+        
+        // Display function for StreamingRead (simplified: E2E, Max Storage, Transport Delay)
+        auto displayReadOp = [this](const char* name, 
+                                const std::vector<int64_t>& e2e,
+                                const std::vector<int64_t>& storage) {
+            if (e2e.empty()) return;
+            
+            int64_t e2eP50 = getPercentile(e2e, 50);
+            int64_t e2eP90 = getPercentile(e2e, 90);
+            int64_t e2eP99 = getPercentile(e2e, 99);
+            
+            std::cout << "\n" << name << " (" << e2e.size() << " streaming operations):\n";
+            std::cout << "  Client E2E:      p50=" << (e2eP50 / 1000.0) << "ms, "
+                      << "p90=" << (e2eP90 / 1000.0) << "ms, "
+                      << "p99=" << (e2eP99 / 1000.0) << "ms\n";
+            
+            if (!storage.empty()) {
+                int64_t storageP50 = getPercentile(storage, 50);
+                int64_t storageP90 = getPercentile(storage, 90);
+                int64_t storageP99 = getPercentile(storage, 99);
+                
+                std::cout << "  Max Storage:     p50=" << (storageP50 / 1000.0) << "ms, "
+                          << "p90=" << (storageP90 / 1000.0) << "ms, "
+                          << "p99=" << (storageP99 / 1000.0) << "ms\n";
+                std::cout << "  Transport Delay: p50=" << ((e2eP50 - storageP50) / 1000.0) << "ms, "
+                          << "p90=" << ((e2eP90 - storageP90) / 1000.0) << "ms, "
+                          << "p99=" << ((e2eP99 - storageP99) / 1000.0) << "ms\n";
+            }
+        };
+        
+        displayFullOp("Lookup", lookupTimes, lookupStorageTimes, lookupServerTotalTimes);
+        displayReadOp("Read", readTimes, readStorageTimes);
+        displayFullOp("Write", writeTimes, writeStorageTimes, writeServerTotalTimes);
+        
+        std::cout << "\n======================================================\n";
+    }
+    
     void merge(const OperationStats& other) {
         lookupTimes.insert(lookupTimes.end(), other.lookupTimes.begin(), other.lookupTimes.end());
         readTimes.insert(readTimes.end(), other.readTimes.begin(), other.readTimes.end());
         writeTimes.insert(writeTimes.end(), other.writeTimes.begin(), other.writeTimes.end());
+        lookupStorageTimes.insert(lookupStorageTimes.end(), other.lookupStorageTimes.begin(), other.lookupStorageTimes.end());
+        lookupServerTotalTimes.insert(lookupServerTotalTimes.end(), other.lookupServerTotalTimes.begin(), other.lookupServerTotalTimes.end());
+        readStorageTimes.insert(readStorageTimes.end(), other.readStorageTimes.begin(), other.readStorageTimes.end());
+        readServerTotalTimes.insert(readServerTotalTimes.end(), other.readServerTotalTimes.begin(), other.readServerTotalTimes.end());
+        writeStorageTimes.insert(writeStorageTimes.end(), other.writeStorageTimes.begin(), other.writeStorageTimes.end());
+        writeServerTotalTimes.insert(writeServerTotalTimes.end(), other.writeServerTotalTimes.begin(), other.writeServerTotalTimes.end());
     }
 };
 
@@ -166,7 +281,7 @@ struct TokenBufferManager {
                       << BLOCK_SIZE << " tokens each\n";
         }
         
-        std::vector<std::future<void>> writeFutures;
+        std::vector<std::future<ServerMetrics>> writeFutures;
         
         hash_t currentParentHash = lastWrittenHash;  // Start with last written hash from previous flush
         
@@ -243,10 +358,10 @@ struct TokenBufferManager {
         }
         try {
             for (size_t i = 0; i < writeFutures.size(); ++i) {
-                auto writeStart = std::chrono::high_resolution_clock::now();
-                writeFutures[i].get();
-                auto writeEnd = std::chrono::high_resolution_clock::now();
-                opStats.addWriteTime(std::chrono::duration_cast<std::chrono::microseconds>(writeEnd - writeStart).count());
+                ServerMetrics serverMetrics = writeFutures[i].get();
+                // Use client E2E time from gRPC client measurement (not .get() time)
+                opStats.addWriteTime(serverMetrics.client_e2e_us);
+                opStats.addWriteServerMetrics(serverMetrics);
                 if (verbose) {
                     std::cout << "[Buffer Flush] Block " << (i + 1) << " write completed\n";
                 }
@@ -466,7 +581,6 @@ bool validateCacheRetrieval(
     }
     
     // Perform lookup with precomputed hashes (V2 API)
-    auto lookupStart = std::chrono::high_resolution_clock::now();
     auto lookupResult = kvStore.Lookup(
         partitionKey,
         completionId,
@@ -474,8 +588,9 @@ bool validateCacheRetrieval(
         expectedTokens.end(),
         blockHashes  // Use the hashes that were computed during write
     );
-    auto lookupEnd = std::chrono::high_resolution_clock::now();
-    opStats.addLookupTime(std::chrono::duration_cast<std::chrono::microseconds>(lookupEnd - lookupStart).count());
+    // Use client E2E time from gRPC client measurement
+    opStats.addLookupTime(lookupResult.server_metrics.client_e2e_us);
+    opStats.addLookupServerMetrics(lookupResult.server_metrics);
     
     int matchedLength = lookupResult.cachedBlocks * 128;
     hash_t lastHash = lookupResult.lastHash;
@@ -503,15 +618,18 @@ bool validateCacheRetrieval(
     
     // Read cached content block by block using V2 API with locations
     if (verbose) {
-        std::cout << "[Cache Validation] Reading " << lookupResult.locations.size() << " blocks...\n";
+        std::cout << "[Cache Validation] Reading " << lookupResult.locations.size() << " blocks using streaming...\n";
     }
     
-    std::vector<std::future<std::pair<bool, PromptChunk>>> readFutures;
+    // Collect all locations for streaming read
+    std::vector<std::string> locations;
+    locations.reserve(lookupResult.locations.size());
     for (size_t i = 0; i < lookupResult.locations.size(); ++i) {
         const auto& location = lookupResult.locations[i];
-        size_t start = i * 128;
-        size_t end = std::min(start + 128, expectedTokens.size());
+        locations.push_back(location.location);
         if (verbose) {
+            size_t start = i * 128;
+            size_t end = std::min(start + 128, expectedTokens.size());
             std::cout << "[Cache Validation] Queuing read for block " << i << " (tokens " << start << ".." << (end-1) << ")\n";
             std::cout << "[Cache Validation]   Block " << i << " location: " << location.location << "\n";
             std::cout << "[Cache Validation]   Block " << i << " first 5: [";
@@ -521,16 +639,23 @@ bool validateCacheRetrieval(
             }
             std::cout << "...]\n";
         }
-        // Read using V2 API with location
-        readFutures.push_back(kvStore.ReadAsync(location.location));
+    }
+    
+    // Use streaming read for better performance (pipelined requests)
+    auto streamingFuture = kvStore.StreamingReadAsync(locations);
+    auto readResults = streamingFuture.get();
+    
+    // Record streaming read as ONE operation (first result has aggregate metrics)
+    if (!readResults.empty()) {
+        auto& [firstSuccess, firstChunk, streamMetrics] = readResults[0];
+        // streamMetrics contains: client_e2e_us=total stream time, storage_latency_us=max storage
+        opStats.addReadTime(streamMetrics.client_e2e_us);
+        opStats.addReadServerMetrics(streamMetrics);
     }
     
     // Verify all blocks
-    for (size_t i = 0; i < lookupResult.locations.size(); ++i) {
-        auto readStart = std::chrono::high_resolution_clock::now();
-        auto [success, chunk] = readFutures[i].get();
-        auto readEnd = std::chrono::high_resolution_clock::now();
-        opStats.addReadTime(std::chrono::duration_cast<std::chrono::microseconds>(readEnd - readStart).count());
+    for (size_t i = 0; i < readResults.size(); ++i) {
+        auto& [success, chunk, serverMetrics] = readResults[i];
         if (verbose) {
             std::cout << "[Cache Validation] Block " << i << " read result: success=" << success 
                       << ", bufferSize=" << chunk.bufferSize << "\n";
@@ -621,7 +746,8 @@ std::vector<Token> processWithCache(
         
         // Read cached content using first location (V2 API)
         auto readFuture = kvStore.ReadAsync(lookupResult.locations[0].location, completionId);
-        auto [success, chunk] = readFuture.get();
+        auto [success, chunk, serverMetrics] = readFuture.get();
+        // Note: Not tracking server metrics in this legacy code path
         
         if (success && !chunk.tokens.empty()) {
             std::cout << "[Cache Read] ✓ Retrieved " << chunk.tokens.size() << " tokens from cache\n";
@@ -865,7 +991,6 @@ std::pair<int, OperationStats> runConversation(const std::vector<PrecomputedProm
                     lookupHashes.push_back(currentHash);
                 }
                 
-                auto lookupStart = std::chrono::high_resolution_clock::now();
                 auto lookupResult = kvStore.Lookup(
                     partitionKey,
                     completionId,
@@ -873,8 +998,9 @@ std::pair<int, OperationStats> runConversation(const std::vector<PrecomputedProm
                     conversationTokens.cend(),
                     lookupHashes
                 );
-                auto lookupEnd = std::chrono::high_resolution_clock::now();
-                opStats.addLookupTime(std::chrono::duration_cast<std::chrono::microseconds>(lookupEnd - lookupStart).count());
+                // Use client E2E time from gRPC client measurement
+                opStats.addLookupTime(lookupResult.server_metrics.client_e2e_us);
+                opStats.addLookupServerMetrics(lookupResult.server_metrics);
                 
                 int matchedLength = lookupResult.cachedBlocks * 128;
                 hash_t lastHash = lookupResult.lastHash;
@@ -1187,17 +1313,8 @@ int main(int argc, char* argv[]) {
                         
                         // Report every 1000 completions
                         if (completed % 1000 == 0 || completed == iterations) {
-                            int64_t lookupP50 = aggregatedStats.getPercentile(aggregatedStats.lookupTimes, 50);
-                            int64_t lookupP90 = aggregatedStats.getPercentile(aggregatedStats.lookupTimes, 90);
-                            int64_t readP50 = aggregatedStats.getPercentile(aggregatedStats.readTimes, 50);
-                            int64_t readP90 = aggregatedStats.getPercentile(aggregatedStats.readTimes, 90);
-                            int64_t writeP50 = aggregatedStats.getPercentile(aggregatedStats.writeTimes, 50);
-                            int64_t writeP90 = aggregatedStats.getPercentile(aggregatedStats.writeTimes, 90);
-                            
-                            std::cout << "[Progress] Completed " << completed << "/" << iterations << " runs\n";
-                            std::cout << "  Lookup: p50=" << (lookupP50 / 1000.0) << "ms, p90=" << (lookupP90 / 1000.0) << "ms\n";
-                            std::cout << "  Read:   p50=" << (readP50 / 1000.0) << "ms, p90=" << (readP90 / 1000.0) << "ms\n";
-                            std::cout << "  Write:  p50=" << (writeP50 / 1000.0) << "ms, p90=" << (writeP90 / 1000.0) << "ms\n";
+                            std::cout << "\n[Progress] Completed " << completed << "/" << iterations << " runs";
+                            aggregatedStats.displayDetailedStats();
                         }
                         
                         it = futures.erase(it);
@@ -1212,20 +1329,28 @@ int main(int argc, char* argv[]) {
         std::cout << "Total runs: " << iterations << "\n";
         std::cout << "Concurrency: " << concurrency << "\n";
         
+        // Display final aggregated statistics
+        aggregatedStats.displayDetailedStats();
+        
         // Cleanup singleton
         KVStoreManager::Shutdown();
         return 0;
     } else {
         // Sequential execution
         std::cout << "Starting " << iterations << " sequential iteration(s)...\n\n";
+        OperationStats aggregatedStats;
         for (int i = 1; i <= iterations; ++i) {
-            auto [result, opStats] = runConversation(precomputedPrompts, i, storageAccountUrl, containerName, true, logLevel); // verbose output enabled for single runs
+            auto [result, opStats] = runConversation(precomputedPrompts, i, storageAccountUrl, containerName, verboseLogging, logLevel);
             if (result != 0) {
                 std::cerr << "ERROR: Run " << i << " failed with code " << result << "\n";
                 return result;
             }
-            if (i < iterations) {
-                std::cout << "\n[Progress] Completed " << i << "/" << iterations << " runs\n\n";
+            aggregatedStats.merge(opStats);
+            
+            // Report every 1000 completions or at the end
+            if (i % 1000 == 0 || i == iterations) {
+                std::cout << "\n[Progress] Completed " << i << "/" << iterations << " runs";
+                aggregatedStats.displayDetailedStats();
             }
         }
         std::cout << "\n=== All " << iterations << " Run(s) Completed Successfully ===\n";

@@ -13,6 +13,18 @@ using hash_t = uint64_t;
 // Type representing a vector of hash values                
 using HashVector = std::vector<hash_t>;
 
+// Server-side performance metrics (from gRPC responses)
+struct ServerMetrics {
+    int64_t storage_latency_us = 0;  // Storage layer latency
+    int64_t total_latency_us = 0;    // Total server-side latency
+    int64_t overhead_us = 0;         // Server overhead (total - storage)
+    int64_t client_e2e_us = 0;       // Client-measured E2E latency (from gRPC client)
+    
+    ServerMetrics() = default;
+    ServerMetrics(int64_t storage, int64_t total, int64_t overhead, int64_t client_e2e = 0)
+        : storage_latency_us(storage), total_latency_us(total), overhead_us(overhead), client_e2e_us(client_e2e) {}
+};
+
 // Struct representing a prompt chunk
 struct PromptChunk {
     hash_t hash;
@@ -44,7 +56,8 @@ struct LookupResult {
     int cachedBlocks;
     hash_t lastHash;
     std::vector<BlockLocation> locations;
+    ServerMetrics server_metrics;  // Server-side performance metrics
     
-    LookupResult() : cachedBlocks(0), lastHash(0), locations() {}
-    LookupResult(int blocks, hash_t hash) : cachedBlocks(blocks), lastHash(hash), locations() {}
+    LookupResult() : cachedBlocks(0), lastHash(0), locations(), server_metrics() {}
+    LookupResult(int blocks, hash_t hash) : cachedBlocks(blocks), lastHash(hash), locations(), server_metrics() {}
 };

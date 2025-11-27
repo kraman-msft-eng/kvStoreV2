@@ -19,13 +19,25 @@ void RunServer(const std::string& serverAddress,
                LogLevel logLevel = LogLevel::Information,
                HttpTransportProtocol transport = HttpTransportProtocol::WinHTTP,
                bool enableSdkLogging = true,
-               bool enableMultiNic = false) {
+               bool enableMultiNic = false,
+               bool enableMetricsLogging = true) {
+    
+    // Enable gRPC verbose logging if environment variable is set
+    const char* grpcVerbose = std::getenv("GRPC_VERBOSITY");
+    if (grpcVerbose) {
+        std::cout << "gRPC verbosity level: " << grpcVerbose << std::endl;
+    }
+    const char* grpcTrace = std::getenv("GRPC_TRACE");
+    if (grpcTrace) {
+        std::cout << "gRPC trace enabled: " << grpcTrace << std::endl;
+    }
     
     kvstore::KVStoreServiceImpl service;
     service.SetLogLevel(logLevel);
     service.SetHttpTransport(transport);
     service.EnableSdkLogging(enableSdkLogging);
     service.EnableMultiNic(enableMultiNic);
+    service.EnableMetricsLogging(enableMetricsLogging);
 
     grpc::EnableDefaultHealthCheckService(true);
     // Note: Proto reflection plugin not available in static builds
@@ -35,6 +47,29 @@ void RunServer(const std::string& serverAddress,
     // Configure server options for performance
     builder.SetMaxReceiveMessageSize(100 * 1024 * 1024);  // 100MB max message size
     builder.SetMaxSendMessageSize(100 * 1024 * 1024);
+    
+    // TCP optimization: Reduce latency for small messages
+    builder.AddChannelArgument("grpc.tcp_user_timeout_ms", 20000);  // 20 second TCP timeout
+    builder.AddChannelArgument("grpc.tcp_nodelay", 1);  // Disable Nagle's algorithm
+    
+    // Server-side keepalive configuration
+    // Allow client keepalive pings and send server keepalive pings
+    builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIME_MS, 10000);  // Ping every 10s
+    builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 5000);  // 5s timeout
+    builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
+    builder.AddChannelArgument(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5000);
+    builder.AddChannelArgument(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);  // Unlimited
+    
+    // Increase concurrent stream limit to handle high client concurrency
+    builder.AddChannelArgument(GRPC_ARG_MAX_CONCURRENT_STREAMS, 200);
+    
+    // HTTP/2 flow control optimizations
+    builder.AddChannelArgument(GRPC_ARG_HTTP2_BDP_PROBE, 1);  // Enable BDP probing
+    
+    // HTTP/2 frame size optimization for large payloads (1.2MB KV cache buffers)
+    builder.AddChannelArgument(GRPC_ARG_HTTP2_MAX_FRAME_SIZE, 16 * 1024 * 1024);  // 16MB max frame
+    builder.AddChannelArgument(GRPC_ARG_HTTP2_STREAM_LOOKAHEAD_BYTES, 64 * 1024 * 1024);  // 64MB stream window
+    builder.AddChannelArgument(GRPC_ARG_HTTP2_WRITE_BUFFER_SIZE, 8 * 1024 * 1024);  // 8MB write buffer
     
     // Add listening port
     builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
@@ -59,6 +94,7 @@ void RunServer(const std::string& serverAddress,
     std::cout << "HTTP Transport: " << (transport == HttpTransportProtocol::WinHTTP ? "WinHTTP" : "LibCurl") << std::endl;
     std::cout << "SDK Logging: " << (enableSdkLogging ? "Enabled" : "Disabled") << std::endl;
     std::cout << "Multi-NIC: " << (enableMultiNic ? "Enabled" : "Disabled") << std::endl;
+    std::cout << "Metrics Logging: " << (enableMetricsLogging ? "Enabled" : "Disabled") << std::endl;
     std::cout << "==================================================" << std::endl;
     std::cout << "Press Ctrl+C to stop the server" << std::endl;
     
@@ -71,13 +107,16 @@ void RunServer(const std::string& serverAddress,
 void PrintUsage(const char* programName) {
     std::cout << "Usage: " << programName << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  --port PORT              Port to listen on (default: 50051)" << std::endl;
-    std::cout << "  --host HOST              Host to bind to (default: 0.0.0.0)" << std::endl;
-    std::cout << "  --log-level LEVEL        Log level: error, info, verbose (default: info)" << std::endl;
-    std::cout << "  --transport TRANSPORT    HTTP transport: winhttp, libcurl (default: libcurl)" << std::endl;
-    std::cout << "  --disable-sdk-logging    Disable Azure SDK logging" << std::endl;
-    std::cout << "  --disable-multi-nic      Disable multi-NIC support (default: enabled)" << std::endl;
-    std::cout << "  --help                   Show this help message" << std::endl;
+    std::cout << "  --port PORT                   Port to listen on (default: 50051)" << std::endl;
+    std::cout << "  --host HOST                   Host to bind to (default: 0.0.0.0)" << std::endl;
+    std::cout << "  --log-level LEVEL             Log level: error, info, verbose (default: info)" << std::endl;
+    std::cout << "  --transport TRANSPORT         HTTP transport: winhttp, libcurl (default: libcurl)" << std::endl;
+    std::cout << "  --enable-sdk-logging          Enable Azure SDK logging (default: disabled)" << std::endl;
+    std::cout << "  --disable-multi-nic           Disable multi-NIC support (default: enabled)" << std::endl;
+    std::cout << "  --disable-metrics             Disable JSON metrics logging to console (default: enabled)" << std::endl;
+    std::cout << "  --metrics-endpoint ENDPOINT   Azure Monitor OTLP endpoint (optional)" << std::endl;
+    std::cout << "  --instrumentation-key KEY     Application Insights instrumentation key (optional)" << std::endl;
+    std::cout << "  --help                        Show this help message" << std::endl;
 }
 
 int main(int argc, char** argv) {
@@ -90,8 +129,11 @@ int main(int argc, char** argv) {
     int port = 50051;
     LogLevel logLevel = LogLevel::Information;
     HttpTransportProtocol transport = HttpTransportProtocol::LibCurl;
-    bool enableSdkLogging = true;
+    bool enableSdkLogging = false;  // Default: disabled for cleaner output
     bool enableMultiNic = true;
+    bool enableMetricsLogging = true;  // Default: enabled
+    std::string metricsEndpoint;
+    std::string instrumentationKey;
     
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -130,11 +172,20 @@ int main(int argc, char** argv) {
                 return 1;
             }
         }
-        else if (arg == "--disable-sdk-logging") {
-            enableSdkLogging = false;
+        else if (arg == "--enable-sdk-logging") {
+            enableSdkLogging = true;
         }
         else if (arg == "--disable-multi-nic") {
             enableMultiNic = false;
+        }
+        else if (arg == "--disable-metrics") {
+            enableMetricsLogging = false;
+        }
+        else if (arg == "--metrics-endpoint" && i + 1 < argc) {
+            metricsEndpoint = argv[++i];
+        }
+        else if (arg == "--instrumentation-key" && i + 1 < argc) {
+            instrumentationKey = argv[++i];
         }
         else {
             std::cerr << "Unknown argument: " << arg << std::endl;
@@ -145,8 +196,11 @@ int main(int argc, char** argv) {
     
     std::string serverAddress = host + ":" + std::to_string(port);
     
+    // Note: Metrics endpoint and instrumentation key are parsed but not used yet
+    // JSON metrics are logged to stdout for now
+    
     try {
-        RunServer(serverAddress, logLevel, transport, enableSdkLogging, enableMultiNic);
+        RunServer(serverAddress, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging);
     } catch (const std::exception& e) {
         std::cerr << "Server error: " << e.what() << std::endl;
         return 1;

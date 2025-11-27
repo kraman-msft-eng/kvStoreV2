@@ -53,8 +53,16 @@ public:
         const std::vector<hash_t>& precomputedHashes
     ) const;
     
-    std::future<std::pair<bool, PromptChunk>> ReadAsync(const std::string& location, const std::string& completionId = "") const;
-    std::future<void> WriteAsync(const PromptChunk& chunk);
+    // Returns: tuple<found, chunk, server_metrics>
+    std::future<std::tuple<bool, PromptChunk, ServerMetrics>> ReadAsync(const std::string& location, const std::string& completionId = "") const;
+    // Returns: future<server_metrics>
+    std::future<ServerMetrics> WriteAsync(const PromptChunk& chunk);
+    
+    // Streaming Read - reads multiple locations with reduced network overhead
+    // Returns: vector of tuple<found, chunk, server_metrics> in same order as locations
+    std::future<std::vector<std::tuple<bool, PromptChunk, ServerMetrics>>> StreamingReadAsync(
+        const std::vector<std::string>& locations,
+        const std::string& completionId = "") const;
 
 private:
     class Impl;

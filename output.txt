@@ -1,0 +1,70 @@
+=== KV Playground - GPT-4 Tokenizer with Cache ===
+Using precomputed tokens (cl100k_base encoding)
+Powered by Azure KVStore with synthetic agent responses
+Loaded chunk.bin: 1258291 bytes
+Azure Storage: https://aoaikv.blob.core.windows.net
+Container: gpt51-promptcache
+Tokens File: conversation_tokens.json
+Iterations: 5
+Concurrency: 2
+Log Level: Verbose
+===================================================
+
+Γ£ô Loaded 7 precomputed prompts
+Starting 5 iterations with concurrency 2...
+
+
+[Progress] Completed 5/5 runs
+=== Performance Statistics (Latency in milliseconds) ===
+
+Lookup (35 operations):
+  Client E2E:      p50=4.364ms, p90=45.692ms, p99=67.32ms
+  Server Storage:  p50=3.545ms, p90=44.99ms, p99=61.939ms
+  Server Total:    p50=3.732ms, p90=45.126ms, p99=62.199ms
+  Server Overhead: p50=0.187ms, p90=0.136ms, p99=0.26ms
+  Network RTT:     p50=0.632ms, p90=0.566ms, p99=5.121ms
+
+Read (75 operations):
+  Client E2E:      p50=14.768ms, p90=20.719ms, p99=57.668ms
+  Server Storage:  p50=11.602ms, p90=13.445ms, p99=51.629ms
+  Server Total:    p50=12.201ms, p90=14.003ms, p99=52.09ms
+  Server Overhead: p50=0.599ms, p90=0.558ms, p99=0.461ms
+  Network RTT:     p50=2.567ms, p90=6.716ms, p99=5.578ms
+
+Write (15 operations):
+  Client E2E:      p50=40.748ms, p90=48.648ms, p99=52.236ms
+  Server Storage:  p50=36.943ms, p90=45.522ms, p99=48.798ms
+  Server Total:    p50=37.084ms, p90=45.654ms, p99=48.925ms
+  Server Overhead: p50=0.141ms, p90=0.132ms, p99=0.127ms
+  Network RTT:     p50=3.664ms, p90=2.994ms, p99=3.311ms
+
+======================================================
+
+=== All Runs Completed Successfully ===
+Total runs: 5
+Concurrency: 2
+
+=== Performance Statistics (Latency in milliseconds) ===
+
+Lookup (35 operations):
+  Client E2E:      p50=4.364ms, p90=45.692ms, p99=67.32ms
+  Server Storage:  p50=3.545ms, p90=44.99ms, p99=61.939ms
+  Server Total:    p50=3.732ms, p90=45.126ms, p99=62.199ms
+  Server Overhead: p50=0.187ms, p90=0.136ms, p99=0.26ms
+  Network RTT:     p50=0.632ms, p90=0.566ms, p99=5.121ms
+
+Read (75 operations):
+  Client E2E:      p50=14.768ms, p90=20.719ms, p99=57.668ms
+  Server Storage:  p50=11.602ms, p90=13.445ms, p99=51.629ms
+  Server Total:    p50=12.201ms, p90=14.003ms, p99=52.09ms
+  Server Overhead: p50=0.599ms, p90=0.558ms, p99=0.461ms
+  Network RTT:     p50=2.567ms, p90=6.716ms, p99=5.578ms
+
+Write (15 operations):
+  Client E2E:      p50=40.748ms, p90=48.648ms, p99=52.236ms
+  Server Storage:  p50=36.943ms, p90=45.522ms, p99=48.798ms
+  Server Total:    p50=37.084ms, p90=45.654ms, p99=48.925ms
+  Server Overhead: p50=0.141ms, p90=0.132ms, p99=0.127ms
+  Network RTT:     p50=3.664ms, p90=2.994ms, p99=3.311ms
+
+======================================================
