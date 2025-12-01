@@ -255,12 +255,36 @@ The gRPC protocol is defined in `protos/kvstore.proto`:
 KVStoreV2/
 ├── CMakeLists.txt              # Root build file (Linux)
 ├── README.md                   # This file
+├── ARCHITECTURE.md             # System architecture documentation
+├── scripts/                    # All scripts organized by function
+│   ├── init/                   # Initialization and build scripts
+│   │   ├── init_repo.ps1
+│   │   ├── init_repo.sh
+│   │   └── build_linux.sh
+│   ├── deploy/                 # Deployment scripts
+│   │   ├── deploy_all.ps1
+│   │   ├── deploy_server.ps1
+│   │   ├── deploy_client.ps1
+│   │   └── deploy-linux-client.ps1
+│   ├── run/                    # Run scripts
+│   │   ├── run_azure_linux.ps1
+│   │   ├── run_azure_linux_node0.ps1
+│   │   ├── run_azure_linux_node1.ps1
+│   │   ├── run_azure_linux_both.ps1
+│   │   ├── runLocal.ps1
+│   │   └── run_local_wsl.sh
+│   └── README.md
 ├── KVService/                  # Windows gRPC service
 │   ├── src/
+│   │   ├── server.cpp
+│   │   ├── KVStoreServiceImpl.cpp
+│   │   ├── InMemoryAccountResolver.cpp
+│   │   └── reactors/
 │   ├── include/
 │   ├── protos/
+│   ├── build_with_local_sdk.ps1
 │   ├── CMakeLists.txt
-│   └── build_with_local_sdk.ps1
+│   └── README.md
 ├── KVClient/                   # Linux gRPC client library
 │   ├── src/
 │   │   └── KVStoreGrpcClient.cpp
