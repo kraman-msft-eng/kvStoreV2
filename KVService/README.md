@@ -224,7 +224,7 @@ For production, deploy as part of KV Store Service:
 - Multiple clusters per region
 - Multiple regions globally
 
-See [ARCHITECTURE.md](../ARCHITECTURE.md) for full deployment topology.
+See [ARCHITECTURE.md](../docs/ARCHITECTURE.md) for full deployment topology.
 
 ## Troubleshooting
 
@@ -266,8 +266,8 @@ Managed via vcpkg.json:
 
 ## Related Documentation
 
-- [ARCHITECTURE.md](../ARCHITECTURE.md) - System architecture and deployment
-- [QUICKSTART.md](./QUICKSTART.md) - Detailed setup guide
+- [ARCHITECTURE.md](../docs/ARCHITECTURE.md) - System architecture and deployment
+- [QUICKSTART.md](../docs/QUICKSTART.md) - Detailed setup guide
 - [KVClient README](../KVClient/README.md) - Linux client library
 
 ## License

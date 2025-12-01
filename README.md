@@ -255,7 +255,11 @@ The gRPC protocol is defined in `protos/kvstore.proto`:
 KVStoreV2/
 ├── CMakeLists.txt              # Root build file (Linux)
 ├── README.md                   # This file
-├── ARCHITECTURE.md             # System architecture documentation
+├── docs/                       # Documentation
+│   ├── ARCHITECTURE.md         # System architecture
+│   ├── QUICKSTART.md           # Quick start guide
+│   ├── SETUP-SUMMARY.md        # Setup summary
+│   └── ...                     # Other docs
 ├── scripts/                    # All scripts organized by function
 │   ├── init/                   # Initialization and build scripts
 │   │   ├── init_repo.ps1
