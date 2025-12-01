@@ -10,7 +10,6 @@ This directory contains detailed documentation for the KV Store Service.
 | [QUICKSTART.md](QUICKSTART.md) | Quick start guide for getting up and running |
 | [SETUP-SUMMARY.md](SETUP-SUMMARY.md) | Summary of setup steps |
 | [GRPC_OPTIMIZATIONS.md](GRPC_OPTIMIZATIONS.md) | gRPC performance tuning details |
-| [ASYNC_SERVER_MIGRATION.md](ASYNC_SERVER_MIGRATION.md) | Migration to async gRPC server |
 | [AZURE_MONITOR_SETUP.md](AZURE_MONITOR_SETUP.md) | Azure Monitor integration |
 | [COMPLETION.md](COMPLETION.md) | Project completion notes |
 
