@@ -6,7 +6,7 @@ This directory contains all scripts for building, deploying, and running the KV 
 
 ```
 scripts/
-├── init/           # Initialization and build scripts
+├── init/           # Build scripts
 ├── deploy/         # Deployment scripts for Azure VMs
 ├── run/            # Scripts to run the service locally or remotely
 └── cleanup_main.ps1  # Cleanup utility
@@ -16,8 +16,6 @@ scripts/
 
 | Script | Platform | Description |
 |--------|----------|-------------|
-| `init/init_repo.ps1` | Windows | Initialize repository and install dependencies |
-| `init/init_repo.sh` | Linux | Initialize repository on Linux |
 | `init/build_linux.sh` | Linux | Build the Linux client and playground |
 
 ## Deploy Scripts
@@ -42,10 +40,10 @@ scripts/
 
 ## Usage Examples
 
-### Initialize on Windows
-```powershell
+### Build on Linux
+```bash
 cd scripts/init
-.\init_repo.ps1
+./build_linux.sh
 ```
 
 ### Deploy to Azure
