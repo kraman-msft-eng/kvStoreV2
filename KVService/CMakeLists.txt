@@ -157,6 +157,7 @@ endif()
 # KVStoreService library
 add_library(KVStoreServiceLib
     src/KVStoreServiceImpl.cpp
+    src/MetricsHelper.cpp
     ${PROTO_SRCS}
     ${GRPC_SRCS}
 )

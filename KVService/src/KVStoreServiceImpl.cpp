@@ -1,4 +1,5 @@
 #include "KVStoreServiceImpl.h"
+#include "MetricsHelper.h"
 #include <iostream>
 #include <sstream>
 #include <chrono>
@@ -11,32 +12,50 @@ namespace kvstore {
 
 // Global flag to control metrics logging (can be disabled for performance)
 static bool g_enableMetricsLogging = true;
+static bool g_enableConsoleMetrics = true;  // Separate control for console output
 
-// Helper function to log metrics in JSON format
+// Helper function to log metrics - sends to both Azure Monitor and optionally console
 void LogMetric(const std::string& method, const std::string& request_id,
                int64_t storage_latency_us, int64_t total_latency_us,
                int64_t e2e_latency_us,
                bool success, const std::string& error = "") {
-    // Skip logging if disabled (for performance)
+    // Skip all logging if disabled
     if (!g_enableMetricsLogging) {
         return;
     }
     
-    // Log to stdout in JSON format
-    std::cout << "{\"type\":\"metric\""
-              << ",\"method\":\"" << method << "\""
-              << ",\"request_id\":\"" << request_id << "\""
-              << ",\"storage_latency_us\":" << storage_latency_us
-              << ",\"total_latency_us\":" << total_latency_us
-              << ",\"overhead_us\":" << (total_latency_us - storage_latency_us)
-              << ",\"success\":" << (success ? "true" : "false")
-              << ",\"error\":\"" << error << "\""
-              << ",\"timestamp\":" << std::chrono::system_clock::now().time_since_epoch().count()
-              << "}" << std::endl;
+    // Convert to milliseconds for metrics
+    double storage_ms = storage_latency_us / 1000.0;
+    double total_ms = total_latency_us / 1000.0;
+    double overhead_ms = (total_latency_us - storage_latency_us) / 1000.0;
+    
+    // Send to Azure Monitor via OpenTelemetry (if initialized)
+    auto& metrics = MetricsHelper::GetInstance();
+    if (metrics.IsInitialized()) {
+        metrics.RecordStorageLatency(method, storage_ms);
+        metrics.RecordTotalLatency(method, total_ms);
+        metrics.RecordOverhead(method, overhead_ms);
+        metrics.IncrementRequestCount(method, success);
+    }
+    
+    // Optionally log to console in JSON format
+    if (g_enableConsoleMetrics) {
+        std::cout << "{\"type\":\"metric\""
+                  << ",\"method\":\"" << method << "\""
+                  << ",\"request_id\":\"" << request_id << "\""
+                  << ",\"storage_latency_us\":" << storage_latency_us
+                  << ",\"total_latency_us\":" << total_latency_us
+                  << ",\"overhead_us\":" << (total_latency_us - storage_latency_us)
+                  << ",\"success\":" << (success ? "true" : "false")
+                  << ",\"error\":\"" << error << "\""
+                  << ",\"timestamp\":" << std::chrono::system_clock::now().time_since_epoch().count()
+                  << "}" << std::endl;
+    }
 }
 
 void KVStoreServiceImpl::EnableMetricsLogging(bool enable) {
     g_enableMetricsLogging = enable;
+    g_enableConsoleMetrics = enable;  // Console follows main flag by default
 }
 
 KVStoreServiceImpl::KVStoreServiceImpl() {

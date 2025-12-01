@@ -1,14 +1,13 @@
 #pragma once
 
-#include <opentelemetry/metrics/provider.h>
-#include <opentelemetry/sdk/metrics/meter_provider.h>
-#include <opentelemetry/exporters/otlp/otlp_http_metric_exporter.h>
-#include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader.h>
-#include <memory>
 #include <string>
+#include <atomic>
+#include <mutex>
 
 namespace kvstore {
 
+// Simple MetricsHelper - can be extended to use OpenTelemetry or Azure Monitor SDK
+// Currently acts as a lightweight counter that can be queried for stats
 class MetricsHelper {
 public:
     static MetricsHelper& GetInstance();
@@ -21,6 +20,10 @@ public:
     void IncrementRequestCount(const std::string& method, bool success);
     
     bool IsInitialized() const { return initialized_; }
+    
+    // Get aggregated stats
+    uint64_t GetRequestCount() const { return request_count_.load(); }
+    uint64_t GetErrorCount() const { return error_count_.load(); }
 
 private:
     MetricsHelper() = default;
@@ -28,15 +31,14 @@ private:
     MetricsHelper(const MetricsHelper&) = delete;
     MetricsHelper& operator=(const MetricsHelper&) = delete;
     
+    std::mutex mutex_;
     bool initialized_ = false;
-    std::shared_ptr<opentelemetry::metrics::MeterProvider> provider_;
-    std::shared_ptr<opentelemetry::metrics::Meter> meter_;
+    std::string endpoint_;
+    std::string instrumentationKey_;
     
-    // Metric instruments
-    std::unique_ptr<opentelemetry::metrics::Histogram<double>> storage_latency_;
-    std::unique_ptr<opentelemetry::metrics::Histogram<double>> total_latency_;
-    std::unique_ptr<opentelemetry::metrics::Histogram<double>> overhead_;
-    std::unique_ptr<opentelemetry::metrics::Counter<uint64_t>> request_count_;
+    // Simple atomic counters for basic stats
+    std::atomic<uint64_t> request_count_{0};
+    std::atomic<uint64_t> error_count_{0};
 };
 
 } // namespace kvstore

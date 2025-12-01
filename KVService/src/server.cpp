@@ -1,4 +1,5 @@
 #include "KVStoreServiceImpl.h"
+#include "MetricsHelper.h"
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <iostream>
@@ -289,8 +290,13 @@ int main(int argc, char** argv) {
     
     std::string serverAddress = host + ":" + std::to_string(port);
     
-    // Note: Metrics endpoint and instrumentation key are parsed but not used yet
-    // JSON metrics are logged to stdout for now
+    // Initialize Azure Monitor metrics if endpoint provided
+    if (!metricsEndpoint.empty() && !instrumentationKey.empty()) {
+        std::cout << "Initializing Azure Monitor metrics..." << std::endl;
+        kvstore::MetricsHelper::GetInstance().Initialize(metricsEndpoint, instrumentationKey);
+    } else if (!metricsEndpoint.empty() || !instrumentationKey.empty()) {
+        std::cerr << "Warning: Both --metrics-endpoint and --instrumentation-key are required for Azure Monitor" << std::endl;
+    }
     
     try {
         RunServer(serverAddress, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging, numThreads);
