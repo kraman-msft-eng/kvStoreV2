@@ -1,4 +1,5 @@
 #include "KVStoreServiceImpl.h"
+#include "InMemoryAccountResolver.h"
 #include "MetricsHelper.h"
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -87,7 +88,8 @@ void RunServer(const std::string& serverAddress,
                bool enableSdkLogging = true,
                bool enableMultiNic = false,
                bool enableMetricsLogging = true,
-               int numThreads = 0) {
+               int numThreads = 0,
+               const std::string& blobDnsSuffix = ".blob.core.windows.net") {
     
     // Report NUMA topology
     EnableAllNumaNodes();
@@ -108,11 +110,28 @@ void RunServer(const std::string& serverAddress,
         std::cout << "gRPC trace enabled: " << grpcTrace << std::endl;
     }
     
-    kvstore::KVStoreServiceImpl service;
+    // Create AccountResolver with configuration
+    kvstore::AccountResolverConfig resolverConfig;
+    resolverConfig.blobDnsSuffix = blobDnsSuffix;
+    resolverConfig.httpTransport = transport;
+    resolverConfig.enableSdkLogging = enableSdkLogging;
+    resolverConfig.enableMultiNic = enableMultiNic;
+    resolverConfig.logLevel = logLevel;
+    
+    auto accountResolver = std::make_shared<kvstore::InMemoryAccountResolver>(resolverConfig);
+    
+    // Set up logging callback for the resolver
+    accountResolver->SetLogCallback([logLevel](LogLevel level, const std::string& message) {
+        if (level == LogLevel::Error) {
+            std::cerr << "[ERROR] " << message << std::endl;
+        } else if (level <= logLevel) {
+            std::cout << "[INFO] " << message << std::endl;
+        }
+    });
+    
+    // Create service with account resolver
+    kvstore::KVStoreServiceImpl service(accountResolver);
     service.SetLogLevel(logLevel);
-    service.SetHttpTransport(transport);
-    service.EnableSdkLogging(enableSdkLogging);
-    service.EnableMultiNic(enableMultiNic);
     service.EnableMetricsLogging(enableMetricsLogging);
 
     grpc::EnableDefaultHealthCheckService(true);
@@ -181,6 +200,7 @@ void RunServer(const std::string& serverAddress,
     std::cout << "Log Level: " << (logLevel == LogLevel::Error ? "Error" : 
                                    logLevel == LogLevel::Information ? "Information" : "Verbose") << std::endl;
     std::cout << "HTTP Transport: " << (transport == HttpTransportProtocol::WinHTTP ? "WinHTTP" : "LibCurl") << std::endl;
+    std::cout << "Blob DNS Suffix: " << blobDnsSuffix << std::endl;
     std::cout << "SDK Logging: " << (enableSdkLogging ? "Enabled" : "Disabled") << std::endl;
     std::cout << "Multi-NIC: " << (enableMultiNic ? "Enabled" : "Disabled") << std::endl;
     std::cout << "Metrics Logging: " << (enableMetricsLogging ? "Enabled" : "Disabled") << std::endl;
@@ -201,6 +221,7 @@ void PrintUsage(const char* programName) {
     std::cout << "  --threads NUM                 Number of server threads (default: auto-detect CPU count)" << std::endl;
     std::cout << "  --log-level LEVEL             Log level: error, info, verbose (default: info)" << std::endl;
     std::cout << "  --transport TRANSPORT         HTTP transport: winhttp, libcurl (default: libcurl)" << std::endl;
+    std::cout << "  --blob-dns-suffix SUFFIX      Blob DNS suffix (default: .blob.core.windows.net)" << std::endl;
     std::cout << "  --enable-sdk-logging          Enable Azure SDK logging (default: disabled)" << std::endl;
     std::cout << "  --disable-multi-nic           Disable multi-NIC support (default: enabled)" << std::endl;
     std::cout << "  --disable-metrics             Disable JSON metrics logging to console (default: enabled)" << std::endl;
@@ -225,6 +246,7 @@ int main(int argc, char** argv) {
     bool enableMetricsLogging = true;  // Default: enabled
     std::string metricsEndpoint;
     std::string instrumentationKey;
+    std::string blobDnsSuffix = ".blob.core.windows.net";
     
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -275,6 +297,9 @@ int main(int argc, char** argv) {
         else if (arg == "--disable-metrics") {
             enableMetricsLogging = false;
         }
+        else if (arg == "--blob-dns-suffix" && i + 1 < argc) {
+            blobDnsSuffix = argv[++i];
+        }
         else if (arg == "--metrics-endpoint" && i + 1 < argc) {
             metricsEndpoint = argv[++i];
         }
@@ -299,7 +324,7 @@ int main(int argc, char** argv) {
     }
     
     try {
-        RunServer(serverAddress, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging, numThreads);
+        RunServer(serverAddress, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging, numThreads, blobDnsSuffix);
     } catch (const std::exception& e) {
         std::cerr << "Server error: " << e.what() << std::endl;
         return 1;

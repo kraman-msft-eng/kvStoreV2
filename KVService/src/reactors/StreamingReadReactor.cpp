@@ -70,7 +70,7 @@ void StreamingReadReactor::OnDone() {
 
 void StreamingReadReactor::ProcessRequest(const ReadRequest& request) {
     // Validate request
-    if (request.account_url().empty() || request.container_name().empty() || request.location().empty()) {
+    if (request.resource_name().empty() || request.container_name().empty() || request.location().empty()) {
         auto response = std::make_unique<ReadResponse>();
         response->set_success(false);
         response->set_found(false);
@@ -82,8 +82,8 @@ void StreamingReadReactor::ProcessRequest(const ReadRequest& request) {
         return;
     }
     
-    // Get store instance
-    auto store = service_->GetOrCreateStore(request.account_url(), request.container_name());
+    // Resolve store using AccountResolver
+    auto store = service_->GetAccountResolver()->ResolveStore(request.resource_name(), request.container_name());
     if (!store) {
         auto response = std::make_unique<ReadResponse>();
         response->set_success(false);

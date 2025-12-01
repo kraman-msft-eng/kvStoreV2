@@ -23,10 +23,32 @@ class AzureStorageKVStoreLibV2::Impl {
 public:
     Impl() : initialized_(false) {}
     
+    // Extract resource name from account URL
+    // e.g., "https://mystorageaccount.blob.core.windows.net" -> "mystorageaccount"
+    static std::string ExtractResourceName(const std::string& accountUrl) {
+        // Find the start of the hostname (after "https://")
+        size_t start = accountUrl.find("://");
+        if (start == std::string::npos) {
+            // No scheme, assume it's already just the resource name
+            return accountUrl;
+        }
+        start += 3; // Skip "://"
+        
+        // Find the first dot (end of resource name)
+        size_t end = accountUrl.find('.', start);
+        if (end == std::string::npos) {
+            // No dot found, return everything after scheme
+            return accountUrl.substr(start);
+        }
+        
+        return accountUrl.substr(start, end - start);
+    }
+    
     bool Initialize(const std::string& accountUrl, 
                    const std::string& containerName,
                    const std::string& grpcServerAddress) {
-        accountUrl_ = accountUrl;
+        // Extract just the resource name from the full URL
+        resourceName_ = ExtractResourceName(accountUrl);
         containerName_ = containerName;
         
         // Configure channel arguments for performance
@@ -67,7 +89,8 @@ public:
         stub_ = KVStoreService::NewStub(channel);
         
         initialized_ = true;
-        LogMessage(LogLevel::Information, "KVClient initialized - gRPC endpoint: " + grpcServerAddress + " (keepalive: 10s, max_streams: 200)");
+        LogMessage(LogLevel::Information, "KVClient initialized - gRPC endpoint: " + grpcServerAddress + 
+                   " (resource: " + resourceName_ + ", keepalive: 10s, max_streams: 200)");
         return true;
     }
     
@@ -88,7 +111,7 @@ public:
         
         // Prepare gRPC request
         LookupRequest request;
-        request.set_account_url(accountUrl_);
+        request.set_resource_name(resourceName_);
         request.set_container_name(containerName_);
         request.set_partition_key(partitionKey);
         request.set_completion_id(completionId);
@@ -174,7 +197,7 @@ public:
             
             // Prepare gRPC request
             ReadRequest request;
-            request.set_account_url(accountUrl_);
+            request.set_resource_name(resourceName_);
             request.set_container_name(containerName_);
             request.set_location(location);
             request.set_completion_id(completionId);
@@ -287,7 +310,7 @@ public:
             
             // Prepare gRPC request
             WriteRequest request;
-            request.set_account_url(accountUrl_);
+            request.set_resource_name(resourceName_);
             request.set_container_name(containerName_);
             
             auto* protoChunk = request.mutable_chunk();
@@ -403,7 +426,7 @@ public:
             // Send all requests first (pipelining)
             for (const auto& location : locations) {
                 ReadRequest request;
-                request.set_account_url(accountUrl_);
+                request.set_resource_name(resourceName_);
                 request.set_container_name(containerName_);
                 request.set_location(location);
                 request.set_completion_id(completionId);
@@ -524,7 +547,7 @@ private:
     }
     
     bool initialized_;
-    std::string accountUrl_;
+    std::string resourceName_;
     std::string containerName_;
     std::unique_ptr<KVStoreService::Stub> stub_;
     mutable std::function<void(LogLevel, const std::string&)> logCallback_;

@@ -14,75 +14,13 @@ void KVStoreServiceImpl::EnableMetricsLogging(bool enable) {
     g_enableConsoleMetrics = enable;  // Console follows main flag by default
 }
 
-KVStoreServiceImpl::KVStoreServiceImpl() {
-    LogInfo("KVStore gRPC Service initialized (Async Callback API)");
+KVStoreServiceImpl::KVStoreServiceImpl(std::shared_ptr<IAccountResolver> accountResolver)
+    : accountResolver_(std::move(accountResolver)) {
+    LogInfo("KVStore gRPC Service initialized (Async Callback API with AccountResolver)");
 }
 
 KVStoreServiceImpl::~KVStoreServiceImpl() {
     LogInfo("KVStore gRPC Service shutting down");
-}
-
-std::string KVStoreServiceImpl::GetStoreKey(
-    const std::string& accountUrl,
-    const std::string& containerName) const {
-    return accountUrl + "|" + containerName;
-}
-
-std::shared_ptr<AzureStorageKVStoreLibV2> KVStoreServiceImpl::GetOrCreateStore(
-    const std::string& accountUrl,
-    const std::string& containerName) {
-    
-    std::string key = GetStoreKey(accountUrl, containerName);
-    
-    // Try read lock first
-    {
-        std::shared_lock<std::shared_mutex> lock(storesMutex_);
-        auto it = stores_.find(key);
-        if (it != stores_.end()) {
-            return it->second;
-        }
-    }
-    
-    // Need to create new instance - acquire write lock
-    std::unique_lock<std::shared_mutex> lock(storesMutex_);
-    
-    // Double-check in case another thread created it
-    auto it = stores_.find(key);
-    if (it != stores_.end()) {
-        return it->second;
-    }
-    
-    // Create new store instance
-    auto store = std::make_shared<AzureStorageKVStoreLibV2>();
-    
-    // Set up logging callback
-    store->SetLogCallback([this](LogLevel level, const std::string& message) {
-        if (level == LogLevel::Error) {
-            LogError(message);
-        } else if (level <= logLevel_) {
-            LogInfo(message);
-        }
-    });
-    
-    store->SetLogLevel(logLevel_);
-    
-    // Initialize the store
-    bool success = store->Initialize(accountUrl, containerName, httpTransport_, enableSdkLogging_, enableMultiNic_);
-    
-    if (!success) {
-        std::ostringstream oss;
-        oss << "Failed to initialize KV Store for account: " << accountUrl << ", container: " << containerName;
-        LogError(oss.str());
-        return nullptr;
-    }
-    
-    stores_[key] = store;
-    
-    std::ostringstream oss;
-    oss << "Created KV Store instance for: " << accountUrl << ", container: " << containerName;
-    LogInfo(oss.str());
-    
-    return store;
 }
 
 // Service implementation - returns reactor for each RPC

@@ -25,8 +25,8 @@ void WriteReactor::OnDone() {
 }
 
 void WriteReactor::StartProcessing() {
-    if (request_->account_url().empty()) {
-        Finish(grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "account_url is required"));
+    if (request_->resource_name().empty()) {
+        Finish(grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "resource_name is required"));
         return;
     }
     if (request_->container_name().empty()) {
@@ -38,7 +38,7 @@ void WriteReactor::StartProcessing() {
         return;
     }
     
-    auto store = service_->GetOrCreateStore(request_->account_url(), request_->container_name());
+    auto store = service_->GetAccountResolver()->ResolveStore(request_->resource_name(), request_->container_name());
     if (!store) {
         response_->set_success(false);
         response_->set_error("Failed to initialize storage for account");

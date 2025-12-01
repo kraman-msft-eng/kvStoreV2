@@ -2,9 +2,7 @@
 
 #include <grpcpp/grpcpp.h>
 #include "kvstore.grpc.pb.h"
-#include "AzureStorageKVStoreLibV2.h"
-#include <unordered_map>
-#include <shared_mutex>
+#include "IAccountResolver.h"
 #include <memory>
 
 namespace kvstore {
@@ -18,10 +16,11 @@ class StreamingReadReactor;
 // KV Store gRPC Service Implementation (Async Callback API)
 // This service provides high-performance, low-latency access to the KV Store
 // Uses async callback API for better performance (no thread pool blocking)
-// Each request includes account credentials to support multi-tenant scenarios
+// Uses IAccountResolver to resolve resource names to storage accounts
 class KVStoreServiceImpl final : public KVStoreService::CallbackService {
 public:
-    KVStoreServiceImpl();
+    // Constructor requires an account resolver
+    explicit KVStoreServiceImpl(std::shared_ptr<IAccountResolver> accountResolver);
     ~KVStoreServiceImpl() override;
     
     // Friend declarations for reactor classes
@@ -54,29 +53,17 @@ public:
 
     // Configuration
     void SetLogLevel(LogLevel level) { logLevel_ = level; }
-    void SetHttpTransport(HttpTransportProtocol transport) { httpTransport_ = transport; }
-    void EnableSdkLogging(bool enable) { enableSdkLogging_ = enable; }
-    void EnableMultiNic(bool enable) { enableMultiNic_ = enable; }
     void EnableMetricsLogging(bool enable);
 
+    // Get the account resolver (for reactors to use)
+    IAccountResolver* GetAccountResolver() { return accountResolver_.get(); }
+
 private:
-    // Get or create a KV Store instance for the given account
-    std::shared_ptr<AzureStorageKVStoreLibV2> GetOrCreateStore(
-        const std::string& accountUrl,
-        const std::string& containerName);
-
-    // Generate a key for the store cache
-    std::string GetStoreKey(const std::string& accountUrl, const std::string& containerName) const;
-
-    // Cache of KV Store instances per account/container
-    mutable std::shared_mutex storesMutex_;
-    std::unordered_map<std::string, std::shared_ptr<AzureStorageKVStoreLibV2>> stores_;
+    // Account resolver for resource name -> KVStore mapping
+    std::shared_ptr<IAccountResolver> accountResolver_;
 
     // Configuration
     LogLevel logLevel_ = LogLevel::Error;
-    HttpTransportProtocol httpTransport_ = HttpTransportProtocol::LibCurl;  // Use LibCurl for multi-NIC support
-    bool enableSdkLogging_ = true;
-    bool enableMultiNic_ = true;  // Enable multi-NIC support by default
 
     // Service-level logging
     void LogInfo(const std::string& message) const;
