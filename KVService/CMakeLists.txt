@@ -158,12 +158,19 @@ endif()
 add_library(KVStoreServiceLib
     src/KVStoreServiceImpl.cpp
     src/MetricsHelper.cpp
+    src/reactors/ReactorCommon.cpp
+    src/reactors/LookupReactor.cpp
+    src/reactors/ReadReactor.cpp
+    src/reactors/WriteReactor.cpp
+    src/reactors/StreamingReadReactor.cpp
     ${PROTO_SRCS}
     ${GRPC_SRCS}
 )
 
 target_include_directories(KVStoreServiceLib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/reactors
     ${PROTO_SRC_DIR}
     ${KVSTORE_LIB_PATH}/AzureStorageKVStoreLib/include
 )
