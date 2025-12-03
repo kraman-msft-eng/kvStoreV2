@@ -486,7 +486,7 @@ public:
             int64_t total_storage_us = 0;
             int64_t min_storage_us = std::numeric_limits<int64_t>::max();
             int64_t max_storage_us = 0;
-            int64_t total_deserialize_us = 0;
+            int64_t last_chunk_deserialize_us = 0;
             
             while (stream->Read(&response)) {
                 auto deser_start = std::chrono::high_resolution_clock::now();
@@ -514,7 +514,8 @@ public:
                 
                 auto deser_end = std::chrono::high_resolution_clock::now();
                 auto deser_us = std::chrono::duration_cast<std::chrono::microseconds>(deser_end - deser_start).count();
-                total_deserialize_us += deser_us;
+                // Track last chunk's deser time - only this adds to E2E (others overlap with network wait)
+                last_chunk_deserialize_us = deser_us;
                 metrics.deserialize_us = deser_us;
                 
                 if (response.has_server_metrics()) {
@@ -546,16 +547,16 @@ public:
             // - storage_latency_us = max storage latency (determines minimum possible stream time)
             // - total_latency_us = client e2e (so Server Overhead = e2e - max_storage shows network overhead)
             // - overhead_us = network + gRPC overhead (e2e - max_storage)
-            // - deserialize_us = total deserialization time for all chunks
+            // - deserialize_us = LAST chunk's deser time (only this adds to E2E, others overlap with wait)
             if (!results.empty()) {
                 auto& [found, chunk, metrics] = results[0];
                 metrics.client_e2e_us = stream_us;
                 metrics.storage_latency_us = max_storage_us;  // Max determines stream time
                 metrics.total_latency_us = stream_us;         // Set to e2e so overhead calc works
                 metrics.overhead_us = stream_us - max_storage_us;  // Network + gRPC overhead
-                metrics.deserialize_us = total_deserialize_us;  // Total deser for all chunks
-                // Pure network = stream time - max storage - total deserialize
-                metrics.network_us = stream_us - max_storage_us - total_deserialize_us;
+                metrics.deserialize_us = last_chunk_deserialize_us;  // Only last chunk adds to E2E
+                // Pure network = stream time - max storage - last chunk deserialize
+                metrics.network_us = stream_us - max_storage_us - last_chunk_deserialize_us;
             }
             
             // Log streaming metrics (only in verbose mode)
@@ -566,7 +567,7 @@ public:
                 metricsLog += ", min_storage=" + std::to_string(min_storage_us) + "us";
                 metricsLog += ", max_storage=" + std::to_string(max_storage_us) + "us";
                 metricsLog += ", parallel_savings=" + std::to_string(total_storage_us - max_storage_us) + "us";
-                metricsLog += ", total_deser=" + std::to_string(total_deserialize_us) + "us";
+                metricsLog += ", last_deser=" + std::to_string(last_chunk_deserialize_us) + "us";
                 metricsLog += ", overhead=" + std::to_string(stream_us - max_storage_us) + "us";
                 std::cerr << metricsLog << std::endl;
             }

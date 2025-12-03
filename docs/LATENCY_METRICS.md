@@ -239,26 +239,30 @@ t1  │   stream_end (last chunk deserialized)                                  
 Read (60000 streaming operations):
   Client E2E:      p50=21.618ms  ◄─── Total time to receive all chunks
   Max Storage:     p50=14.334ms  ◄─── Longest single blob download
-  Deserialize:     p50= 0.150ms  ◄─── Total PromptChunk extraction (buffer+tokens)
-  Pure Network:    p50= 7.134ms  ◄─── Actual network + gRPC streaming overhead
-  Transport Delay: p50= 7.284ms  ◄─── Network + deser combined
+  Deserialize:     p50= 0.045ms  ◄─── LAST chunk only (others overlap with wait)
+  Pure Network:    p50= 7.239ms  ◄─── Actual network + gRPC streaming overhead
+  Transport Delay: p50= 7.284ms  ◄─── Network + last chunk deser
 
   ┌────────────────────────────────────────────────────────────────┐
   │                     Client E2E: 21.618ms                       │
   ├────────────────────────────────┬─────────────────────┬─────────┤
-  │   Max Storage: 14.334ms        │ Pure Net: 7.134ms   │Deser    │
-  │                                │                     │0.15ms   │
-  │   (slowest blob download       │  (network + gRPC    │         │
+  │   Max Storage: 14.334ms        │ Pure Net: 7.239ms   │Last     │
+  │                                │                     │Deser    │
+  │   (slowest blob download       │  (network + gRPC    │45μs     │
   │    determines minimum time)    │   streaming + HTTP2)│         │
   └────────────────────────────────┴─────────────────────┴─────────┘
   
-  Per-chunk deserialization breakdown:
+  Why only LAST chunk deserialization matters:
   ┌────────────────────────────────────────────────────────────────┐
-  │ For each 4KB PromptChunk (~100 tokens):                        │
-  │   - Buffer copy (4KB):     ~20-30μs                            │
-  │   - Token copy (100 ints): ~10-15μs                            │
-  │   - Field extraction:      ~5-10μs                             │
-  │   Total per chunk:         ~35-55μs                            │
+  │ Timeline for 3-chunk streaming read:                           │
+  │                                                                │
+  │ Chunk 1: [===NETWORK===][DESER]                                │
+  │ Chunk 2:        [===NETWORK===][DESER]     ◄─── Overlapped!    │
+  │ Chunk 3:               [===NETWORK===][DESER] ◄─── Only this   │
+  │                                               adds to E2E      │
+  │                                                                │
+  │ While deserializing chunk N, we're waiting for chunk N+1       │
+  │ So deserialization time is "free" except for the last chunk    │
   └────────────────────────────────────────────────────────────────┘
 ```
 
