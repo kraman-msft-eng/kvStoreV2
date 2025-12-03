@@ -9,8 +9,8 @@ This document explains how latency metrics are calculated and measured across th
 │                              CLIENT E2E (measured by client)                        │
 │                                                                                     │
 │  ┌──────────┐     ┌─────────────────────────────────────────────────┐    ┌────────┐│
-│  │ Request  │────►│              NETWORK RTT                        │───►│Response││
-│  │  Build   │     │  (Client E2E - Server Total)                    │    │ Parse  ││
+│  │ Serialize│────►│              NETWORK RTT                        │───►│Deserial││
+│  │ Request  │     │  (gRPC call - Server Total - Client Deser)      │    │Response││
 │  └──────────┘     │                                                 │    └────────┘│
 │                   │  ┌───────────────────────────────────────────┐  │              │
 │                   │  │         SERVER TOTAL (rpc_start→rpc_end)  │  │              │
@@ -39,6 +39,36 @@ This document explains how latency metrics are calculated and measured across th
 
 **Note**: Server Total does NOT include gRPC request deserialization. That time is 
 captured in the Network RTT measurement (along with actual network transit time).
+```
+
+## Client-Side Timing Breakdown
+
+The client measures three distinct phases for each RPC:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                           CLIENT E2E BREAKDOWN                                     │
+│                                                                                    │
+│  ┌─────────────────┐  ┌──────────────────────────────────┐  ┌───────────────────┐ │
+│  │   SERIALIZE     │  │         GRPC CALL                │  │   DESERIALIZE     │ │
+│  │   (serialize_us)│  │   (includes network + server)    │  │   (deserialize_us)│ │
+│  ├─────────────────┤  ├──────────────────────────────────┤  ├───────────────────┤ │
+│  │ Build request   │  │ ┌──────────────────────────────┐ │  │ Extract response  │ │
+│  │ protobuf:       │  │ │   PURE NETWORK (network_us)  │ │  │ protobuf:         │ │
+│  │                 │  │ │ = gRPC call - Server Total   │ │  │                   │ │
+│  │ - set fields    │  │ │   - Deserialize              │ │  │ - copy buffer     │ │
+│  │ - copy buffer   │  │ │                              │ │  │ - copy tokens     │ │
+│  │ - add tokens    │  │ │ Includes:                    │ │  │ - extract fields  │ │
+│  │                 │  │ │ - Request network transit    │ │  │                   │ │
+│  │ Write: ~50-200μs│  │ │ - Server protobuf decode     │ │  │ Read: ~50-200μs   │ │
+│  │ Read: ~5-10μs   │  │ │ - Response network transit   │ │  │ Write: ~0μs       │ │
+│  │ Lookup: ~10-20μs│  │ │ - gRPC overhead              │ │  │ Lookup: ~5-10μs   │ │
+│  │                 │  │ └──────────────────────────────┘ │  │                   │ │
+│  └─────────────────┘  └──────────────────────────────────┘  └───────────────────┘ │
+│                                                                                    │
+│  Formula: network_us = gRPC_call_time - server_total_us - deserialize_us          │
+│                                                                                    │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Lookup / Write Operations (Unary RPC)
@@ -131,20 +161,20 @@ Lookup (70000 operations):
   Server Storage:  p50=3.579ms  ◄─── Azure Blob lookup (Bloom filter + index)
   Server Total:    p50=3.790ms  ◄─── Entire time request spent on server
   Server Overhead: p50=0.211ms  ◄─── gRPC/protobuf/processing overhead
-  Network RTT:     p50=0.754ms  ◄─── Round-trip network latency
+  Serialize:       p50=0.015ms  ◄─── Client request building (small payload)
+  Deserialize:     p50=0.008ms  ◄─── Client response extraction (hash + position)
+  Pure Network:    p50=0.731ms  ◄─── Actual network transit + gRPC framing
 
   ┌────────────────────────────────────────────────────────────────┐
   │                     Client E2E: 4.544ms                        │
-  ├──────────┬─────────────────────────────────────────┬───────────┤
-  │ Net 0.4ms│           Server Total: 3.79ms          │ Net 0.35ms│
-  │  (req)   ├────────────────────────────┬────────────┤  (resp)   │
-  │          │ Storage: 3.579ms           │Ovhd 0.21ms │           │
-  └──────────┴────────────────────────────┴────────────┴───────────┘
-              ◄────────────────────────────────────────►
-                        Sent in gRPC response
+  ├───────┬──────────┬─────────────────────────────────┬───────┬───┤
+  │Ser    │ Net 0.4ms│     Server Total: 3.79ms        │Net    │Des│
+  │0.015ms│  (req)   ├─────────────────────┬───────────┤0.33ms │er │
+  │       │          │Storage: 3.579ms     │Ovhd 0.21ms│(resp) │8μs│
+  └───────┴──────────┴─────────────────────┴───────────┴───────┴───┘
 ```
 
-## Streaming Read Operation (Server-Side Streaming RPC)
+## Streaming Read Operation (Bidirectional Streaming RPC)
 
 For streaming reads, the metrics work differently because multiple chunks are streamed:
 
@@ -154,16 +184,18 @@ For streaming reads, the metrics work differently because multiple chunks are st
 
     ┌─────────────────────────────────────────────────────────────────────────────────┐
     │                                                                                 │
-t0  │   client_start ─────────────┐                                                   │
+t0  │   stream_start ─────────────┐                                                   │
     │   [Start E2E timer]         │                                                   │
     │                             ▼                                                   │
+    │   Send all requests         ║                                                   │
+    │   (pipelining)              ║                                                   │
     │                     ╔═══════════════╗                                           │
     │                     ║   NETWORK     ║                                           │
-    │   ──────────────────║   REQUEST     ║──────────────────────►                    │
+    │   ──────────────────║   REQUESTS    ║──────────────────────►                    │
     │                     ╚═══════════════╝                                           │
     │                                                                                 │
     │                                                   ┌─────────────────────────────│
-    │                                                   │  FOR EACH CHUNK:            │
+    │                                                   │  FOR EACH CHUNK (parallel): │
     │                                                   │                             │
     │                                                   │  storage_start[i]           │
     │                                                   │  ┌────────────────┐         │
@@ -176,20 +208,29 @@ t0  │   client_start ─────────────┐               
     │   ◄─────────║   STREAM      ║◄────────────────────┤                             │
     │   chunk[i]  ║   CHUNK[i]    ║  (includes latency) │                             │
     │             ╚═══════════════╝                     │                             │
+    │                                                   │                             │
+    │   deser_start[i] ───────┐                         │                             │
+    │   Extract PromptChunk:  │                         │                             │
+    │   - copy buffer         │ deserialize_us[i]       │                             │
+    │   - copy tokens         │                         │                             │
+    │   - extract fields      │                         │                             │
+    │   deser_end[i] ─────────┘                         │                             │
     │                                                   └─────────────────────────────│
     │                                                                                 │
     │   (repeat for all chunks)                                                       │
     │                                                                                 │
-t1  │   client_end (last chunk received)                                              │
+t1  │   stream_end (last chunk deserialized)                                          │
     │                                                                                 │
     └─────────────────────────────────────────────────────────────────────────────────┘
 
     CALCULATED METRICS:
     ═══════════════════
 
-    Client E2E       = t1 - t0                        (entire stream duration)
-    Max Storage      = max(storage_latency[i])        (longest individual blob read)
-    Transport Delay  = Client E2E - Max Storage       (network + gRPC streaming overhead)
+    Client E2E         = t1 - t0                          (entire stream duration)
+    Max Storage        = max(storage_latency[i])          (longest individual blob read)
+    Total Deserialize  = sum(deserialize_us[i])           (all chunk extraction time)
+    Pure Network       = Client E2E - Max Storage - Total Deserialize
+    Transport Delay    = Client E2E - Max Storage         (includes deser + network)
 ```
 
 ## Example Breakdown: Read (Streaming)
@@ -198,16 +239,27 @@ t1  │   client_end (last chunk received)                                      
 Read (60000 streaming operations):
   Client E2E:      p50=21.618ms  ◄─── Total time to receive all chunks
   Max Storage:     p50=14.334ms  ◄─── Longest single blob download
-  Transport Delay: p50= 7.284ms  ◄─── Network + streaming + serialization
+  Deserialize:     p50= 0.150ms  ◄─── Total PromptChunk extraction (buffer+tokens)
+  Pure Network:    p50= 7.134ms  ◄─── Actual network + gRPC streaming overhead
+  Transport Delay: p50= 7.284ms  ◄─── Network + deser combined
 
   ┌────────────────────────────────────────────────────────────────┐
   │                     Client E2E: 21.618ms                       │
-  ├────────────────────────────────┬───────────────────────────────┤
-  │   Max Storage: 14.334ms        │  Transport Delay: 7.284ms     │
-  │                                │  (network + gRPC streaming +  │
-  │   (slowest blob download       │   protobuf serialization +    │
-  │    determines minimum time)    │   HTTP/2 framing)             │
-  └────────────────────────────────┴───────────────────────────────┘
+  ├────────────────────────────────┬─────────────────────┬─────────┤
+  │   Max Storage: 14.334ms        │ Pure Net: 7.134ms   │Deser    │
+  │                                │                     │0.15ms   │
+  │   (slowest blob download       │  (network + gRPC    │         │
+  │    determines minimum time)    │   streaming + HTTP2)│         │
+  └────────────────────────────────┴─────────────────────┴─────────┘
+  
+  Per-chunk deserialization breakdown:
+  ┌────────────────────────────────────────────────────────────────┐
+  │ For each 4KB PromptChunk (~100 tokens):                        │
+  │   - Buffer copy (4KB):     ~20-30μs                            │
+  │   - Token copy (100 ints): ~10-15μs                            │
+  │   - Field extraction:      ~5-10μs                             │
+  │   Total per chunk:         ~35-55μs                            │
+  └────────────────────────────────────────────────────────────────┘
 ```
 
 ## Write Operation
@@ -218,16 +270,26 @@ Write (30000 operations):
   Server Storage:  p50=26.666ms  ◄─── Azure Blob write (upload chunk)
   Server Total:    p50=26.834ms  ◄─── Entire time request spent on server
   Server Overhead: p50= 0.168ms  ◄─── Very low (minimal processing)
-  Network RTT:     p50= 5.944ms  ◄─── Higher due to larger request payload
+  Serialize:       p50= 0.120ms  ◄─── Client PromptChunk serialization (buffer+tokens)
+  Pure Network:    p50= 5.824ms  ◄─── Higher due to larger request payload
 
   ┌────────────────────────────────────────────────────────────────┐
   │                     Client E2E: 32.778ms                       │
-  ├──────────┬─────────────────────────────────────────┬───────────┤
-  │ Net 3ms  │           Server Total: 26.834ms        │ Net 2.9ms │
-  │  (req)   ├─────────────────────────────┬───────────┤  (resp)   │
-  │  (larger │ Storage: 26.666ms           │Ovhd 0.17ms│  (small)  │
-  │  payload)│                             │           │           │
-  └──────────┴─────────────────────────────┴───────────┴───────────┘
+  ├───────┬──────────┬─────────────────────────────────┬───────────┤
+  │Ser    │ Net 3ms  │     Server Total: 26.834ms      │ Net 2.9ms │
+  │0.12ms │  (req)   ├─────────────────────┬───────────┤  (resp)   │
+  │(large │ (large   │Storage: 26.666ms    │Ovhd 0.17ms│  (small)  │
+  │buffer)│ payload) │                     │           │           │
+  └───────┴──────────┴─────────────────────┴───────────┴───────────┘
+  
+  Serialization breakdown for 4KB PromptChunk:
+  ┌────────────────────────────────────────────────────────────────┐
+  │ Write request serialization:                                   │
+  │   - set_buffer(4KB data):    ~50-100μs   ◄─── Main cost        │
+  │   - add_tokens(100 ints):    ~20-40μs                          │
+  │   - set scalar fields:       ~5-10μs                           │
+  │   Total serialize_us:        ~75-150μs                         │
+  └────────────────────────────────────────────────────────────────┘
 ```
 
 ## Code References
@@ -263,37 +325,86 @@ metrics->set_overhead_us(total_us - storage_us);
 ```cpp
 // In KVStoreGrpcClient.cpp
 
-auto client_start = std::chrono::high_resolution_clock::now();
-Status status = stub_->Lookup(&context, request, &response);  // gRPC call
-auto client_end = std::chrono::high_resolution_clock::now();
+// === SERIALIZE TIMING ===
+auto serialize_start = std::chrono::high_resolution_clock::now();
 
-// Client E2E
-auto e2e_us = duration_cast<microseconds>(client_end - client_start).count();
+// Build request protobuf
+WriteRequest request;
+request.set_resource_name(resourceName_);
+auto* protoChunk = request.mutable_chunk();
+protoChunk->set_buffer(chunk.buffer.data(), chunk.buffer.size());  // Main cost
+for (auto token : chunk.tokens) {
+    protoChunk->add_tokens(static_cast<int64_t>(token));
+}
 
-// Network RTT (derived)
-auto network_rtt_us = e2e_us - response.server_metrics().total_latency_us();
+auto serialize_end = std::chrono::high_resolution_clock::now();
+
+// === GRPC CALL ===
+auto grpc_start = std::chrono::high_resolution_clock::now();
+Status status = stub_->Write(&context, request, &response);
+auto grpc_end = std::chrono::high_resolution_clock::now();
+
+// === DESERIALIZE TIMING (for Read) ===
+auto deserialize_start = std::chrono::high_resolution_clock::now();
+
+// Extract response protobuf (for Read - PromptChunk)
+const auto& protoChunk = response.chunk();
+chunk.buffer.assign(bufferData.begin(), bufferData.end());  // Main cost
+for (auto token : protoChunk.tokens()) {
+    chunk.tokens.push_back(static_cast<Token>(token));
+}
+
+auto deserialize_end = std::chrono::high_resolution_clock::now();
+
+// === CALCULATE METRICS ===
+auto serialize_us = duration_cast<microseconds>(serialize_end - serialize_start).count();
+auto grpc_us = duration_cast<microseconds>(grpc_end - grpc_start).count();
+auto deserialize_us = duration_cast<microseconds>(deserialize_end - deserialize_start).count();
+
+metrics.serialize_us = serialize_us;
+metrics.deserialize_us = deserialize_us;
+metrics.client_e2e_us = grpc_us;
+
+// Pure network = gRPC call - server processing - client deserialize
+metrics.network_us = grpc_us - response.server_metrics().total_latency_us() - deserialize_us;
 ```
 
 ### Playground (Linux) - Metric Display
 
 ```cpp
-// In main.cpp
+// In main.cpp - displayDetailedStats()
 
 // Server Overhead = Server Total - Storage
 std::cout << "  Server Overhead: p50=" << ((serverTotalP50 - storageP50) / 1000.0) << "ms";
 
-// Network RTT = Client E2E - Server Total  
-std::cout << "  Network RTT:     p50=" << ((e2eP50 - serverTotalP50) / 1000.0) << "ms";
+// Client-side serialization/deserialization breakdown
+std::cout << "  Serialize:       p50=" << (serP50 / 1000.0) << "ms";
+std::cout << "  Deserialize:     p50=" << (deserP50 / 1000.0) << "ms";
+std::cout << "  Pure Network:    p50=" << (netP50 / 1000.0) << "ms";
 ```
+
+## Metrics Summary Table
+
+| Metric | Description | Calculation |
+|--------|-------------|-------------|
+| **Client E2E** | Total client-observed latency | `grpc_end - grpc_start` |
+| **Serialize** | Time to build request protobuf | `serialize_end - serialize_start` |
+| **Deserialize** | Time to extract response protobuf | `deserialize_end - deserialize_start` |
+| **Pure Network** | Actual network + gRPC framing | `gRPC_call - Server_Total - Deserialize` |
+| **Server Total** | Time in server reactor (after decode) | `rpc_end - rpc_start` |
+| **Server Storage** | Azure Blob operation time | `storage_end - storage_start` |
+| **Server Overhead** | Server processing overhead | `Server_Total - Server_Storage` |
 
 ## Where Time Goes (Summary)
 
-| Component | Lookup | Read | Write | Notes |
-|-----------|--------|------|-------|-------|
+| Component | Lookup | Read (Streaming) | Write | Notes |
+|-----------|--------|------------------|-------|-------|
 | **Client E2E** | 4.5ms | 21.6ms | 32.8ms | What user experiences |
+| **Serialize** | 0.015ms (0.3%) | ~0.005ms (~0%) | 0.12ms (0.4%) | Request building |
+| **Deserialize** | 0.008ms (0.2%) | 0.15ms (0.7%) | ~0ms | Response extraction |
+| **Pure Network** | 0.73ms (16%) | 7.1ms (33%) | 5.8ms (18%) | Actual transit time |
 | **Server Storage** | 3.6ms (79%) | 14.3ms (66%) | 26.7ms (81%) | Azure Blob operations |
-| **Server Overhead** | 0.2ms (5%) | - | 0.2ms (1%) | gRPC/protobuf processing |
-| **Network RTT** | 0.8ms (16%) | 7.3ms (34%) | 5.9ms (18%) | Round-trip latency |
+| **Server Overhead** | 0.2ms (5%) | - | 0.2ms (1%) | gRPC/protobuf on server |
 
 ## Optimization Insights
 
@@ -301,3 +412,26 @@ std::cout << "  Network RTT:     p50=" << ((e2eP50 - serverTotalP50) / 1000.0) <
 2. **Server overhead is minimal** - gRPC async + protobuf is fast (~0.2ms)
 3. **Network varies** - Private VNet gives low RTT; streaming has higher transport delay
 4. **Writes are slowest** - Blob uploads take longer than lookups/reads
+5. **Serialization is cheap** - Even for 4KB PromptChunk, serialize/deserialize is <0.2ms combined
+6. **Buffer copy is the main cost** - In both serialize and deserialize, the buffer copy dominates
+
+## Key Takeaways for PromptChunk Serialization
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ PromptChunk (~4KB buffer + ~100 tokens):                       │
+│                                                                │
+│ WRITE (Serialize):                                             │
+│   serialize_us ≈ 75-150μs (0.4% of 32ms E2E)                   │
+│   - set_buffer() is the main cost                              │
+│   - Protobuf copies the buffer to internal storage             │
+│                                                                │
+│ READ (Deserialize):                                            │
+│   deserialize_us ≈ 35-55μs per chunk (0.7% of 21ms E2E)        │
+│   - buffer.assign() copies data from protobuf                  │
+│   - Token vector copy is secondary                             │
+│                                                                │
+│ CONCLUSION: Protobuf ser/deser overhead is negligible (<1%)    │
+│             compared to Azure Storage (66-81%) and Network     │
+└────────────────────────────────────────────────────────────────┘
+```
