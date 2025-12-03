@@ -109,6 +109,9 @@ public:
             return result;
         }
         
+        // === MEASURE REQUEST SERIALIZATION ===
+        auto serialize_start = std::chrono::high_resolution_clock::now();
+        
         // Prepare gRPC request
         LookupRequest request;
         request.set_resource_name(resourceName_);
@@ -124,25 +127,35 @@ public:
             request.add_precomputed_hashes(hash);
         }
         
-        // Make gRPC call with E2E latency measurement
+        // Force size calculation (triggers internal serialization prep, but doesn't serialize twice)
+        size_t request_size = request.ByteSizeLong();
+        
+        auto serialize_end = std::chrono::high_resolution_clock::now();
+        auto serialize_us = std::chrono::duration_cast<std::chrono::microseconds>(serialize_end - serialize_start).count();
+        
+        // === MAKE gRPC CALL (network + server processing) ===
         LookupResponse response;
         ClientContext context;
         
-        auto client_start = std::chrono::high_resolution_clock::now();
+        auto grpc_start = std::chrono::high_resolution_clock::now();
         Status status = stub_->Lookup(&context, request, &response);
-        auto client_end = std::chrono::high_resolution_clock::now();
+        auto grpc_end = std::chrono::high_resolution_clock::now();
         
-        // Calculate client-side E2E latency
-        auto e2e_us = std::chrono::duration_cast<std::chrono::microseconds>(client_end - client_start).count();
+        // === MEASURE RESPONSE DESERIALIZATION (data extraction) ===
+        auto deserialize_start = std::chrono::high_resolution_clock::now();
+        
+        // Calculate gRPC call time (includes network + server + protobuf ser/deser by gRPC)
+        auto grpc_us = std::chrono::duration_cast<std::chrono::microseconds>(grpc_end - grpc_start).count();
         
         // Log comprehensive metrics (client E2E + server-side breakdown)
-        std::string metricsLog = "[Lookup] e2e=" + std::to_string(e2e_us) + "us";
+        std::string metricsLog = "[Lookup] grpc=" + std::to_string(grpc_us) + "us";
+        metricsLog += ", req_ser=" + std::to_string(serialize_us) + "us";
+        metricsLog += ", req_size=" + std::to_string(request_size) + "B";
         if (response.has_server_metrics()) {
             const auto& sm = response.server_metrics();
             metricsLog += ", server_total=" + std::to_string(sm.total_latency_us()) + "us";
             metricsLog += ", storage=" + std::to_string(sm.storage_latency_us()) + "us";
             metricsLog += ", overhead=" + std::to_string(sm.overhead_us()) + "us";
-            metricsLog += ", network_rtt=" + std::to_string(e2e_us - sm.total_latency_us()) + "us";
         }
         metricsLog += ", partition=" + partitionKey + ", blocks=" + std::to_string(response.cached_blocks());
         LogMessage(LogLevel::Information, metricsLog);
@@ -157,7 +170,7 @@ public:
             return result;
         }
         
-        // Convert response
+        // Convert response (this is part of deserialization)
         result.cachedBlocks = response.cached_blocks();
         result.lastHash = response.last_hash();
         
@@ -168,6 +181,9 @@ public:
             result.locations.push_back(location);
         }
         
+        auto deserialize_end = std::chrono::high_resolution_clock::now();
+        auto deserialize_us = std::chrono::duration_cast<std::chrono::microseconds>(deserialize_end - deserialize_start).count();
+        
         // Populate server metrics
         if (response.has_server_metrics()) {
             const auto& sm = response.server_metrics();
@@ -175,8 +191,17 @@ public:
             result.server_metrics.total_latency_us = sm.total_latency_us();
             result.server_metrics.overhead_us = sm.overhead_us();
         }
-        // Add client-measured E2E time
+        
+        // Add client-measured times
+        auto e2e_us = serialize_us + grpc_us + deserialize_us;
         result.server_metrics.client_e2e_us = e2e_us;
+        result.server_metrics.serialize_us = serialize_us;
+        result.server_metrics.deserialize_us = deserialize_us;
+        
+        // Pure network = gRPC call - server total (gRPC call includes protobuf ser/deser inside gRPC)
+        if (result.server_metrics.total_latency_us > 0) {
+            result.server_metrics.network_us = grpc_us - result.server_metrics.total_latency_us;
+        }
         
         return result;
     }

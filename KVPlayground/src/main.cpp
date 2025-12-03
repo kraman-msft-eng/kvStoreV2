@@ -52,6 +52,13 @@ struct OperationStats {
     std::vector<int64_t> writeStorageTimes;
     std::vector<int64_t> writeServerTotalTimes;
     
+    // Client-side serialization/deserialization breakdown
+    std::vector<int64_t> lookupSerializeTimes;
+    std::vector<int64_t> lookupDeserializeTimes;
+    std::vector<int64_t> lookupNetworkTimes;
+    std::vector<int64_t> writeSerializeTimes;
+    std::vector<int64_t> writeNetworkTimes;
+    
     void addLookupTime(int64_t us) { lookupTimes.push_back(us); }
     void addReadTime(int64_t us) { readTimes.push_back(us); }
     void addWriteTime(int64_t us) { writeTimes.push_back(us); }
@@ -61,6 +68,16 @@ struct OperationStats {
         if (m.total_latency_us > 0) {
             lookupStorageTimes.push_back(m.storage_latency_us);
             lookupServerTotalTimes.push_back(m.total_latency_us);
+        }
+        // Add client-side serialization/deserialization times
+        if (m.serialize_us > 0) {
+            lookupSerializeTimes.push_back(m.serialize_us);
+        }
+        if (m.deserialize_us > 0) {
+            lookupDeserializeTimes.push_back(m.deserialize_us);
+        }
+        if (m.network_us > 0) {
+            lookupNetworkTimes.push_back(m.network_us);
         }
     }
     void addReadServerMetrics(const ServerMetrics& m) {
@@ -76,6 +93,13 @@ struct OperationStats {
             writeStorageTimes.push_back(m.storage_latency_us);
             writeServerTotalTimes.push_back(m.total_latency_us);
         }
+        // Add client-side serialization times
+        if (m.serialize_us > 0) {
+            writeSerializeTimes.push_back(m.serialize_us);
+        }
+        if (m.network_us > 0) {
+            writeNetworkTimes.push_back(m.network_us);
+        }
     }
     
     int64_t getPercentile(const std::vector<int64_t>& data, double percentile) const {
@@ -90,29 +114,26 @@ struct OperationStats {
     void displayDetailedStats() const {
         std::cout << "\n=== Performance Statistics (Latency in milliseconds) ===\n";
         
-        // Display function for Lookup and Write (full metrics)
-        auto displayFullOp = [this](const char* name, 
-                                const std::vector<int64_t>& e2e,
-                                const std::vector<int64_t>& storage,
-                                const std::vector<int64_t>& serverTotal) {
-            if (e2e.empty()) return;
+        // Display function for Lookup with serialization breakdown
+        auto displayLookupWithSerDe = [this]() {
+            if (lookupTimes.empty()) return;
             
-            int64_t e2eP50 = getPercentile(e2e, 50);
-            int64_t e2eP90 = getPercentile(e2e, 90);
-            int64_t e2eP99 = getPercentile(e2e, 99);
+            int64_t e2eP50 = getPercentile(lookupTimes, 50);
+            int64_t e2eP90 = getPercentile(lookupTimes, 90);
+            int64_t e2eP99 = getPercentile(lookupTimes, 99);
             
-            std::cout << "\n" << name << " (" << e2e.size() << " operations):\n";
+            std::cout << "\nLookup (" << lookupTimes.size() << " operations):\n";
             std::cout << "  Client E2E:      p50=" << (e2eP50 / 1000.0) << "ms, "
                       << "p90=" << (e2eP90 / 1000.0) << "ms, "
                       << "p99=" << (e2eP99 / 1000.0) << "ms\n";
             
-            if (!storage.empty() && !serverTotal.empty()) {
-                int64_t storageP50 = getPercentile(storage, 50);
-                int64_t storageP90 = getPercentile(storage, 90);
-                int64_t storageP99 = getPercentile(storage, 99);
-                int64_t serverTotalP50 = getPercentile(serverTotal, 50);
-                int64_t serverTotalP90 = getPercentile(serverTotal, 90);
-                int64_t serverTotalP99 = getPercentile(serverTotal, 99);
+            if (!lookupStorageTimes.empty() && !lookupServerTotalTimes.empty()) {
+                int64_t storageP50 = getPercentile(lookupStorageTimes, 50);
+                int64_t storageP90 = getPercentile(lookupStorageTimes, 90);
+                int64_t storageP99 = getPercentile(lookupStorageTimes, 99);
+                int64_t serverTotalP50 = getPercentile(lookupServerTotalTimes, 50);
+                int64_t serverTotalP90 = getPercentile(lookupServerTotalTimes, 90);
+                int64_t serverTotalP99 = getPercentile(lookupServerTotalTimes, 99);
                 
                 std::cout << "  Server Storage:  p50=" << (storageP50 / 1000.0) << "ms, "
                           << "p90=" << (storageP90 / 1000.0) << "ms, "
@@ -123,9 +144,83 @@ struct OperationStats {
                 std::cout << "  Server Overhead: p50=" << ((serverTotalP50 - storageP50) / 1000.0) << "ms, "
                           << "p90=" << ((serverTotalP90 - storageP90) / 1000.0) << "ms, "
                           << "p99=" << ((serverTotalP99 - storageP99) / 1000.0) << "ms\n";
-                std::cout << "  Network RTT:     p50=" << ((e2eP50 - serverTotalP50) / 1000.0) << "ms, "
-                          << "p90=" << ((e2eP90 - serverTotalP90) / 1000.0) << "ms, "
-                          << "p99=" << ((e2eP99 - serverTotalP99) / 1000.0) << "ms\n";
+            }
+            
+            // Show serialization/deserialization breakdown if available
+            if (!lookupSerializeTimes.empty()) {
+                int64_t serP50 = getPercentile(lookupSerializeTimes, 50);
+                int64_t serP90 = getPercentile(lookupSerializeTimes, 90);
+                int64_t serP99 = getPercentile(lookupSerializeTimes, 99);
+                std::cout << "  Serialize:       p50=" << (serP50 / 1000.0) << "ms, "
+                          << "p90=" << (serP90 / 1000.0) << "ms, "
+                          << "p99=" << (serP99 / 1000.0) << "ms\n";
+            }
+            if (!lookupDeserializeTimes.empty()) {
+                int64_t deserP50 = getPercentile(lookupDeserializeTimes, 50);
+                int64_t deserP90 = getPercentile(lookupDeserializeTimes, 90);
+                int64_t deserP99 = getPercentile(lookupDeserializeTimes, 99);
+                std::cout << "  Deserialize:     p50=" << (deserP50 / 1000.0) << "ms, "
+                          << "p90=" << (deserP90 / 1000.0) << "ms, "
+                          << "p99=" << (deserP99 / 1000.0) << "ms\n";
+            }
+            if (!lookupNetworkTimes.empty()) {
+                int64_t netP50 = getPercentile(lookupNetworkTimes, 50);
+                int64_t netP90 = getPercentile(lookupNetworkTimes, 90);
+                int64_t netP99 = getPercentile(lookupNetworkTimes, 99);
+                std::cout << "  Pure Network:    p50=" << (netP50 / 1000.0) << "ms, "
+                          << "p90=" << (netP90 / 1000.0) << "ms, "
+                          << "p99=" << (netP99 / 1000.0) << "ms\n";
+            }
+        };
+        
+        // Display function for Write with serialization breakdown  
+        auto displayWriteWithSerDe = [this]() {
+            if (writeTimes.empty()) return;
+            
+            int64_t e2eP50 = getPercentile(writeTimes, 50);
+            int64_t e2eP90 = getPercentile(writeTimes, 90);
+            int64_t e2eP99 = getPercentile(writeTimes, 99);
+            
+            std::cout << "\nWrite (" << writeTimes.size() << " operations):\n";
+            std::cout << "  Client E2E:      p50=" << (e2eP50 / 1000.0) << "ms, "
+                      << "p90=" << (e2eP90 / 1000.0) << "ms, "
+                      << "p99=" << (e2eP99 / 1000.0) << "ms\n";
+            
+            if (!writeStorageTimes.empty() && !writeServerTotalTimes.empty()) {
+                int64_t storageP50 = getPercentile(writeStorageTimes, 50);
+                int64_t storageP90 = getPercentile(writeStorageTimes, 90);
+                int64_t storageP99 = getPercentile(writeStorageTimes, 99);
+                int64_t serverTotalP50 = getPercentile(writeServerTotalTimes, 50);
+                int64_t serverTotalP90 = getPercentile(writeServerTotalTimes, 90);
+                int64_t serverTotalP99 = getPercentile(writeServerTotalTimes, 99);
+                
+                std::cout << "  Server Storage:  p50=" << (storageP50 / 1000.0) << "ms, "
+                          << "p90=" << (storageP90 / 1000.0) << "ms, "
+                          << "p99=" << (storageP99 / 1000.0) << "ms\n";
+                std::cout << "  Server Total:    p50=" << (serverTotalP50 / 1000.0) << "ms, "
+                          << "p90=" << (serverTotalP90 / 1000.0) << "ms, "
+                          << "p99=" << (serverTotalP99 / 1000.0) << "ms\n";
+                std::cout << "  Server Overhead: p50=" << ((serverTotalP50 - storageP50) / 1000.0) << "ms, "
+                          << "p90=" << ((serverTotalP90 - storageP90) / 1000.0) << "ms, "
+                          << "p99=" << ((serverTotalP99 - storageP99) / 1000.0) << "ms\n";
+            }
+            
+            // Show serialization breakdown if available
+            if (!writeSerializeTimes.empty()) {
+                int64_t serP50 = getPercentile(writeSerializeTimes, 50);
+                int64_t serP90 = getPercentile(writeSerializeTimes, 90);
+                int64_t serP99 = getPercentile(writeSerializeTimes, 99);
+                std::cout << "  Serialize:       p50=" << (serP50 / 1000.0) << "ms, "
+                          << "p90=" << (serP90 / 1000.0) << "ms, "
+                          << "p99=" << (serP99 / 1000.0) << "ms\n";
+            }
+            if (!writeNetworkTimes.empty()) {
+                int64_t netP50 = getPercentile(writeNetworkTimes, 50);
+                int64_t netP90 = getPercentile(writeNetworkTimes, 90);
+                int64_t netP99 = getPercentile(writeNetworkTimes, 99);
+                std::cout << "  Pure Network:    p50=" << (netP50 / 1000.0) << "ms, "
+                          << "p90=" << (netP90 / 1000.0) << "ms, "
+                          << "p99=" << (netP99 / 1000.0) << "ms\n";
             }
         };
         
@@ -158,9 +253,9 @@ struct OperationStats {
             }
         };
         
-        displayFullOp("Lookup", lookupTimes, lookupStorageTimes, lookupServerTotalTimes);
+        displayLookupWithSerDe();
         displayReadOp("Read", readTimes, readStorageTimes);
-        displayFullOp("Write", writeTimes, writeStorageTimes, writeServerTotalTimes);
+        displayWriteWithSerDe();
         
         std::cout << "\n======================================================\n";
     }
@@ -175,6 +270,12 @@ struct OperationStats {
         readServerTotalTimes.insert(readServerTotalTimes.end(), other.readServerTotalTimes.begin(), other.readServerTotalTimes.end());
         writeStorageTimes.insert(writeStorageTimes.end(), other.writeStorageTimes.begin(), other.writeStorageTimes.end());
         writeServerTotalTimes.insert(writeServerTotalTimes.end(), other.writeServerTotalTimes.begin(), other.writeServerTotalTimes.end());
+        // Merge serialization/deserialization times
+        lookupSerializeTimes.insert(lookupSerializeTimes.end(), other.lookupSerializeTimes.begin(), other.lookupSerializeTimes.end());
+        lookupDeserializeTimes.insert(lookupDeserializeTimes.end(), other.lookupDeserializeTimes.begin(), other.lookupDeserializeTimes.end());
+        lookupNetworkTimes.insert(lookupNetworkTimes.end(), other.lookupNetworkTimes.begin(), other.lookupNetworkTimes.end());
+        writeSerializeTimes.insert(writeSerializeTimes.end(), other.writeSerializeTimes.begin(), other.writeSerializeTimes.end());
+        writeNetworkTimes.insert(writeNetworkTimes.end(), other.writeNetworkTimes.begin(), other.writeNetworkTimes.end());
     }
 };
 

@@ -19,6 +19,9 @@ struct ServerMetrics {
     int64_t total_latency_us = 0;    // Total server-side latency
     int64_t overhead_us = 0;         // Server overhead (total - storage)
     int64_t client_e2e_us = 0;       // Client-measured E2E latency (from gRPC client)
+    int64_t serialize_us = 0;        // Client-side request serialization time
+    int64_t deserialize_us = 0;      // Client-side response deserialization time
+    int64_t network_us = 0;          // Pure network time (e2e - server_total - serialize - deserialize)
     
     ServerMetrics() = default;
     ServerMetrics(int64_t storage, int64_t total, int64_t overhead, int64_t client_e2e = 0)
