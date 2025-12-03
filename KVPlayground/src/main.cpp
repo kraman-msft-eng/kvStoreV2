@@ -233,59 +233,49 @@ struct OperationStats {
             }
         };
         
-        // Display function for Read with deserialization breakdown (for single/non-streaming reads)
-        auto displayReadWithSerDe = [this]() {
+        // Display function for Read (streaming) - shows max storage and transport delay
+        // Note: For streaming reads, storage_latency = max storage, total_latency = client e2e
+        auto displayReadStreaming = [this]() {
             if (readTimes.empty()) return;
             
             int64_t e2eP50 = getPercentile(readTimes, 50);
             int64_t e2eP90 = getPercentile(readTimes, 90);
             int64_t e2eP99 = getPercentile(readTimes, 99);
             
-            std::cout << "\nRead (" << readTimes.size() << " operations):\n";
+            std::cout << "\nRead (" << readTimes.size() << " streaming operations):\n";
             std::cout << "  Client E2E:      p50=" << (e2eP50 / 1000.0) << "ms, "
                       << "p90=" << (e2eP90 / 1000.0) << "ms, "
                       << "p99=" << (e2eP99 / 1000.0) << "ms\n";
             
-            if (!readStorageTimes.empty() && !readServerTotalTimes.empty()) {
-                int64_t storageP50 = getPercentile(readStorageTimes, 50);
-                int64_t storageP90 = getPercentile(readStorageTimes, 90);
-                int64_t storageP99 = getPercentile(readStorageTimes, 99);
-                int64_t serverTotalP50 = getPercentile(readServerTotalTimes, 50);
-                int64_t serverTotalP90 = getPercentile(readServerTotalTimes, 90);
-                int64_t serverTotalP99 = getPercentile(readServerTotalTimes, 99);
+            // For streaming: readStorageTimes contains MAX storage per stream
+            if (!readStorageTimes.empty()) {
+                int64_t maxStorageP50 = getPercentile(readStorageTimes, 50);
+                int64_t maxStorageP90 = getPercentile(readStorageTimes, 90);
+                int64_t maxStorageP99 = getPercentile(readStorageTimes, 99);
                 
-                std::cout << "  Server Storage:  p50=" << (storageP50 / 1000.0) << "ms, "
-                          << "p90=" << (storageP90 / 1000.0) << "ms, "
-                          << "p99=" << (storageP99 / 1000.0) << "ms\n";
-                std::cout << "  Server Total:    p50=" << (serverTotalP50 / 1000.0) << "ms, "
-                          << "p90=" << (serverTotalP90 / 1000.0) << "ms, "
-                          << "p99=" << (serverTotalP99 / 1000.0) << "ms\n";
-                std::cout << "  Server Overhead: p50=" << ((serverTotalP50 - storageP50) / 1000.0) << "ms, "
-                          << "p90=" << ((serverTotalP90 - storageP90) / 1000.0) << "ms, "
-                          << "p99=" << ((serverTotalP99 - storageP99) / 1000.0) << "ms\n";
+                std::cout << "  Max Storage:     p50=" << (maxStorageP50 / 1000.0) << "ms, "
+                          << "p90=" << (maxStorageP90 / 1000.0) << "ms, "
+                          << "p99=" << (maxStorageP99 / 1000.0) << "ms\n";
+                
+                // Transport Delay = E2E - Max Storage (includes network + all deser)
+                std::cout << "  Transport Delay: p50=" << ((e2eP50 - maxStorageP50) / 1000.0) << "ms, "
+                          << "p90=" << ((e2eP90 - maxStorageP90) / 1000.0) << "ms, "
+                          << "p99=" << ((e2eP99 - maxStorageP99) / 1000.0) << "ms\n";
             }
             
-            // Show deserialization breakdown if available (Read has large PromptChunk response)
+            // Show last chunk deserialization time (only this adds to E2E)
             if (!readDeserializeTimes.empty()) {
                 int64_t deserP50 = getPercentile(readDeserializeTimes, 50);
                 int64_t deserP90 = getPercentile(readDeserializeTimes, 90);
                 int64_t deserP99 = getPercentile(readDeserializeTimes, 99);
-                std::cout << "  Deserialize:     p50=" << (deserP50 / 1000.0) << "ms, "
+                std::cout << "  Last Chunk Deser:p50=" << (deserP50 / 1000.0) << "ms, "
                           << "p90=" << (deserP90 / 1000.0) << "ms, "
                           << "p99=" << (deserP99 / 1000.0) << "ms\n";
-            }
-            if (!readNetworkTimes.empty()) {
-                int64_t netP50 = getPercentile(readNetworkTimes, 50);
-                int64_t netP90 = getPercentile(readNetworkTimes, 90);
-                int64_t netP99 = getPercentile(readNetworkTimes, 99);
-                std::cout << "  Pure Network:    p50=" << (netP50 / 1000.0) << "ms, "
-                          << "p90=" << (netP90 / 1000.0) << "ms, "
-                          << "p99=" << (netP99 / 1000.0) << "ms\n";
             }
         };
         
         displayLookupWithSerDe();
-        displayReadWithSerDe();
+        displayReadStreaming();
         displayWriteWithSerDe();
         
         std::cout << "\n======================================================\n";
