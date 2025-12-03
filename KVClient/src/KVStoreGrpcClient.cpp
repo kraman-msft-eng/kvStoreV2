@@ -314,8 +314,14 @@ public:
                 metrics.total_latency_us = sm.total_latency_us();
                 metrics.overhead_us = sm.overhead_us();
             }
-            // Add client-measured E2E time
+            // Add client-measured E2E time and serialization metrics
             metrics.client_e2e_us = e2e_us;
+            metrics.serialize_us = request_build_us;
+            metrics.deserialize_us = total_deser_us;
+            // Pure network = gRPC call - server total - client deserialize
+            if (server_total_us > 0) {
+                metrics.network_us = grpc_call_us - server_total_us - total_deser_us;
+            }
             
             return std::make_tuple(true, chunk, metrics);
         });
@@ -401,14 +407,23 @@ public:
             }
             
             // Populate and return server metrics
+            int64_t server_total_us = 0;
             if (response.has_server_metrics()) {
                 const auto& sm = response.server_metrics();
                 metrics.storage_latency_us = sm.storage_latency_us();
                 metrics.total_latency_us = sm.total_latency_us();
                 metrics.overhead_us = sm.overhead_us();
+                server_total_us = sm.total_latency_us();
             }
-            // Add client-measured E2E time
+            // Add client-measured E2E time and serialization metrics
             metrics.client_e2e_us = e2e_us;
+            metrics.serialize_us = total_ser_us;
+            // Write response is small, deserialize is negligible
+            metrics.deserialize_us = 0;
+            // Pure network = gRPC call - server processing
+            if (server_total_us > 0) {
+                metrics.network_us = grpc_call_us - server_total_us;
+            }
             
             return metrics;
         });

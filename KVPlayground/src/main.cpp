@@ -58,6 +58,8 @@ struct OperationStats {
     std::vector<int64_t> lookupNetworkTimes;
     std::vector<int64_t> writeSerializeTimes;
     std::vector<int64_t> writeNetworkTimes;
+    std::vector<int64_t> readDeserializeTimes;
+    std::vector<int64_t> readNetworkTimes;
     
     void addLookupTime(int64_t us) { lookupTimes.push_back(us); }
     void addReadTime(int64_t us) { readTimes.push_back(us); }
@@ -85,6 +87,13 @@ struct OperationStats {
         if (m.total_latency_us > 0) {
             readStorageTimes.push_back(m.storage_latency_us);
             readServerTotalTimes.push_back(m.total_latency_us);
+        }
+        // Add client-side deserialization times (Read involves large PromptChunk responses)
+        if (m.deserialize_us > 0) {
+            readDeserializeTimes.push_back(m.deserialize_us);
+        }
+        if (m.network_us > 0) {
+            readNetworkTimes.push_back(m.network_us);
         }
     }
     void addWriteServerMetrics(const ServerMetrics& m) {
@@ -224,37 +233,59 @@ struct OperationStats {
             }
         };
         
-        // Display function for StreamingRead (simplified: E2E, Max Storage, Transport Delay)
-        auto displayReadOp = [this](const char* name, 
-                                const std::vector<int64_t>& e2e,
-                                const std::vector<int64_t>& storage) {
-            if (e2e.empty()) return;
+        // Display function for Read with deserialization breakdown (for single/non-streaming reads)
+        auto displayReadWithSerDe = [this]() {
+            if (readTimes.empty()) return;
             
-            int64_t e2eP50 = getPercentile(e2e, 50);
-            int64_t e2eP90 = getPercentile(e2e, 90);
-            int64_t e2eP99 = getPercentile(e2e, 99);
+            int64_t e2eP50 = getPercentile(readTimes, 50);
+            int64_t e2eP90 = getPercentile(readTimes, 90);
+            int64_t e2eP99 = getPercentile(readTimes, 99);
             
-            std::cout << "\n" << name << " (" << e2e.size() << " streaming operations):\n";
+            std::cout << "\nRead (" << readTimes.size() << " operations):\n";
             std::cout << "  Client E2E:      p50=" << (e2eP50 / 1000.0) << "ms, "
                       << "p90=" << (e2eP90 / 1000.0) << "ms, "
                       << "p99=" << (e2eP99 / 1000.0) << "ms\n";
             
-            if (!storage.empty()) {
-                int64_t storageP50 = getPercentile(storage, 50);
-                int64_t storageP90 = getPercentile(storage, 90);
-                int64_t storageP99 = getPercentile(storage, 99);
+            if (!readStorageTimes.empty() && !readServerTotalTimes.empty()) {
+                int64_t storageP50 = getPercentile(readStorageTimes, 50);
+                int64_t storageP90 = getPercentile(readStorageTimes, 90);
+                int64_t storageP99 = getPercentile(readStorageTimes, 99);
+                int64_t serverTotalP50 = getPercentile(readServerTotalTimes, 50);
+                int64_t serverTotalP90 = getPercentile(readServerTotalTimes, 90);
+                int64_t serverTotalP99 = getPercentile(readServerTotalTimes, 99);
                 
-                std::cout << "  Max Storage:     p50=" << (storageP50 / 1000.0) << "ms, "
+                std::cout << "  Server Storage:  p50=" << (storageP50 / 1000.0) << "ms, "
                           << "p90=" << (storageP90 / 1000.0) << "ms, "
                           << "p99=" << (storageP99 / 1000.0) << "ms\n";
-                std::cout << "  Transport Delay: p50=" << ((e2eP50 - storageP50) / 1000.0) << "ms, "
-                          << "p90=" << ((e2eP90 - storageP90) / 1000.0) << "ms, "
-                          << "p99=" << ((e2eP99 - storageP99) / 1000.0) << "ms\n";
+                std::cout << "  Server Total:    p50=" << (serverTotalP50 / 1000.0) << "ms, "
+                          << "p90=" << (serverTotalP90 / 1000.0) << "ms, "
+                          << "p99=" << (serverTotalP99 / 1000.0) << "ms\n";
+                std::cout << "  Server Overhead: p50=" << ((serverTotalP50 - storageP50) / 1000.0) << "ms, "
+                          << "p90=" << ((serverTotalP90 - storageP90) / 1000.0) << "ms, "
+                          << "p99=" << ((serverTotalP99 - storageP99) / 1000.0) << "ms\n";
+            }
+            
+            // Show deserialization breakdown if available (Read has large PromptChunk response)
+            if (!readDeserializeTimes.empty()) {
+                int64_t deserP50 = getPercentile(readDeserializeTimes, 50);
+                int64_t deserP90 = getPercentile(readDeserializeTimes, 90);
+                int64_t deserP99 = getPercentile(readDeserializeTimes, 99);
+                std::cout << "  Deserialize:     p50=" << (deserP50 / 1000.0) << "ms, "
+                          << "p90=" << (deserP90 / 1000.0) << "ms, "
+                          << "p99=" << (deserP99 / 1000.0) << "ms\n";
+            }
+            if (!readNetworkTimes.empty()) {
+                int64_t netP50 = getPercentile(readNetworkTimes, 50);
+                int64_t netP90 = getPercentile(readNetworkTimes, 90);
+                int64_t netP99 = getPercentile(readNetworkTimes, 99);
+                std::cout << "  Pure Network:    p50=" << (netP50 / 1000.0) << "ms, "
+                          << "p90=" << (netP90 / 1000.0) << "ms, "
+                          << "p99=" << (netP99 / 1000.0) << "ms\n";
             }
         };
         
         displayLookupWithSerDe();
-        displayReadOp("Read", readTimes, readStorageTimes);
+        displayReadWithSerDe();
         displayWriteWithSerDe();
         
         std::cout << "\n======================================================\n";
@@ -276,6 +307,8 @@ struct OperationStats {
         lookupNetworkTimes.insert(lookupNetworkTimes.end(), other.lookupNetworkTimes.begin(), other.lookupNetworkTimes.end());
         writeSerializeTimes.insert(writeSerializeTimes.end(), other.writeSerializeTimes.begin(), other.writeSerializeTimes.end());
         writeNetworkTimes.insert(writeNetworkTimes.end(), other.writeNetworkTimes.begin(), other.writeNetworkTimes.end());
+        readDeserializeTimes.insert(readDeserializeTimes.end(), other.readDeserializeTimes.begin(), other.readDeserializeTimes.end());
+        readNetworkTimes.insert(readNetworkTimes.end(), other.readNetworkTimes.begin(), other.readNetworkTimes.end());
     }
 };
 
