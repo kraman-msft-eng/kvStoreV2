@@ -14,6 +14,7 @@ This document explains how latency metrics are calculated and measured across th
 │  └──────────┘     │                                                 │    └────────┘│
 │                   │  ┌───────────────────────────────────────────┐  │              │
 │                   │  │         SERVER TOTAL (rpc_start→rpc_end)  │  │              │
+│                   │  │  (starts AFTER gRPC request decode)       │  │              │
 │                   │  │                                           │  │              │
 │                   │  │  ┌─────────────────────────────────────┐  │  │              │
 │                   │  │  │     SERVER STORAGE                  │  │  │              │
@@ -27,14 +28,17 @@ This document explains how latency metrics are calculated and measured across th
 │                   │  │  └─────────────────────────────────────┘  │  │              │
 │                   │  │                                           │  │              │
 │                   │  │  SERVER OVERHEAD = Server Total - Storage │  │              │
-│                   │  │  (gRPC deserialization, token conversion, │  │              │
-│                   │  │   response building, protobuf encoding)   │  │              │
+│                   │  │  (token conversion, response building,    │  │              │
+│                   │  │   protobuf ENCODING - NOT decoding)       │  │              │
 │                   │  │                                           │  │              │
 │                   │  └───────────────────────────────────────────┘  │              │
 │                   │                                                 │              │
 │                   └─────────────────────────────────────────────────┘              │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+
+**Note**: Server Total does NOT include gRPC request deserialization. That time is 
+captured in the Network RTT measurement (along with actual network transit time).
 ```
 
 ## Lookup / Write Operations (Unary RPC)
@@ -56,9 +60,20 @@ t0  │   client_start ─────────────┐               
     │                             ▼                                                   │
     │                     ╔═══════════════╗                                           │
     │                     ║   NETWORK     ║                                           │
-t1  │   ──────────────────║   REQUEST     ║─────────────────────►  rpc_start ────────│
-    │                     ║   TRANSIT     ║                        [Start timer]      │
+    │   ──────────────────║   REQUEST     ║─────────────────────►                     │
+    │                     ║   TRANSIT     ║                                           │
     │                     ╚═══════════════╝                                           │
+    │                                                                                 │
+    │                                                              gRPC receives      │
+    │                                                              HTTP/2 frames      │
+    │                                                                                 │
+    │                                                              Protobuf decode    │
+    │                                                              (deserialize       │
+    │                                                               LookupRequest)    │
+    │                                                                                 │
+t1  │                                                              rpc_start ────────│
+    │                                                              [Start timer]      │
+    │                                                              (Reactor created)  │
     │                                                                                 │
     │                                                              Validate request   │
     │                                                              Resolve account    │
@@ -77,6 +92,7 @@ t3  │                                                              storage_end
     │                                                              [Stop timer]       │
     │                                                                                 │
     │                                                              Build response     │
+    │                                                              Protobuf encode    │
     │                                                              Set server_metrics │
     │                                                                                 │
 t4  │                                                              rpc_end ──────────│
@@ -100,10 +116,11 @@ t6  │   client_end ───────────────┘           
     ═══════════════════
 
     Client E2E      = t6 - t0        (measured by client)
-    Server Total    = t4 - t1        (measured by server, sent in response)
+    Server Total    = t4 - t1        (measured by server, AFTER request decode)
     Server Storage  = t3 - t2        (measured by server, sent in response)
     Server Overhead = (t4-t1)-(t3-t2) = Server Total - Server Storage
     Network RTT     = (t6-t0)-(t4-t1) = Client E2E - Server Total
+                                       (includes request decode time + actual network)
 ```
 
 ## Example Breakdown: Lookup
