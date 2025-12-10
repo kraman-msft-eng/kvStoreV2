@@ -17,6 +17,17 @@ if ($LASTEXITCODE -eq 0) {
 }
 Write-Host ""
 
+# Deploy service configuration file
+Write-Host "Copying service-config.json..." -ForegroundColor Yellow
+scp C:\Users\kraman\source\KVStoreV2\KVService\service-config.json azureuser@${windowsVM}:~/kvstore/
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "  ✓ Config file deployed successfully" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ Config file deployment failed" -ForegroundColor Red
+    exit 1
+}
+Write-Host ""
+
 # Restart Server (optional - prompts user)
 Write-Host "Server needs restart to use new binary" -ForegroundColor Yellow
 $restart = Read-Host "Restart KVStoreServer now? (y/n)"
@@ -26,7 +37,7 @@ if ($restart -eq 'y') {
     Start-Sleep -Seconds 2
     
     Write-Host "Starting new server on port 8085..." -ForegroundColor Yellow
-    ssh azureuser@$windowsVM "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd ~/kvstore; .\KVStoreServer.exe --port 8085'"
+    ssh azureuser@$windowsVM "Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd ~/kvstore; .\KVStoreServer.exe --port 8085 --config service-config.json'"
     
     Write-Host "  ✓ Server restarted" -ForegroundColor Green
 } else {
@@ -36,3 +47,4 @@ Write-Host ""
 
 Write-Host "===== Deployment Complete =====" -ForegroundColor Green
 Write-Host "Location: azureuser@${windowsVM}:~/kvstore/KVStoreServer.exe" -ForegroundColor Gray
+Write-Host "Config:   azureuser@${windowsVM}:~/kvstore/service-config.json" -ForegroundColor Gray

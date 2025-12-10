@@ -159,6 +159,8 @@ add_library(KVStoreServiceLib
     src/KVStoreServiceImpl.cpp
     src/MetricsHelper.cpp
     src/InMemoryAccountResolver.cpp
+    src/StorageDatabaseResolver.cpp
+    src/FileConfigProvider.cpp
     src/reactors/ReactorCommon.cpp
     src/reactors/LookupReactor.cpp
     src/reactors/ReadReactor.cpp

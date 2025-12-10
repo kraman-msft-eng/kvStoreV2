@@ -10,14 +10,14 @@ $job1 = Start-Job -ScriptBlock {
     $sshKey = "C:\Users\kraman\Downloads\kvClient.pem"
     $linuxVM = "20.115.133.84"
     $serverIP = "172.16.0.4:8085"
-    ssh -i $sshKey azureuser@$linuxVM "cd ~/kvgrpc && export KVSTORE_GRPC_SERVER='$serverIP' && export GRPC_VERBOSITY=error && ./KVPlayground conversation_tokens.json 10000 10 -s https://aoaikv.blob.core.windows.net -c gpt51-promptcache --log-level error"
+    ssh -i $sshKey azureuser@$linuxVM "cd ~/kvgrpc && export KVSTORE_GRPC_SERVER='$serverIP' && export GRPC_VERBOSITY=error && ./KVPlayground conversation_tokens.json 10000 10 -s https://aoaikv.blob.core.windows.net -c gpt41-promptcache --log-level error"
 }
 
 $job2 = Start-Job -ScriptBlock {
     $sshKey = "C:\Users\kraman\Downloads\kvClient.pem"
     $linuxVM = "20.115.133.84"
     $serverIP = "172.16.0.4:8086"
-    ssh -i $sshKey azureuser@$linuxVM "cd ~/kvgrpc && export KVSTORE_GRPC_SERVER='$serverIP' && export GRPC_VERBOSITY=error && ./KVPlayground conversation_tokens.json 10000 10 -s https://aoaikv.blob.core.windows.net -c gpt51-promptcache --log-level error"
+    ssh -i $sshKey azureuser@$linuxVM "cd ~/kvgrpc && export KVSTORE_GRPC_SERVER='$serverIP' && export GRPC_VERBOSITY=error && ./KVPlayground conversation_tokens.json 10000 10 -s https://aoaikv.blob.core.windows.net -c gpt41-promptcache --log-level error"
 }
 
 Write-Host "Waiting for both clients to complete..." -ForegroundColor Green

@@ -1,6 +1,8 @@
 #include "KVStoreServiceImpl.h"
-#include "InMemoryAccountResolver.h"
+#include "StorageDatabaseResolver.h"
 #include "MetricsHelper.h"
+#include "ServiceConfig.h"
+#include "FileConfigProvider.h"
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <iostream>
@@ -82,14 +84,14 @@ void SignalHandler(int signal) {
     }
 }
 
-void RunServer(const std::string& serverAddress, 
+void RunServer(const std::string& serverAddress,
+               const kvstore::ServiceConfig& serviceConfig,
                LogLevel logLevel = LogLevel::Information,
                HttpTransportProtocol transport = HttpTransportProtocol::WinHTTP,
                bool enableSdkLogging = true,
                bool enableMultiNic = false,
                bool enableMetricsLogging = true,
-               int numThreads = 0,
-               const std::string& blobDnsSuffix = ".blob.core.windows.net") {
+               int numThreads = 0) {
     
     // Report NUMA topology
     EnableAllNumaNodes();
@@ -99,6 +101,14 @@ void RunServer(const std::string& serverAddress,
         numThreads = GetTotalProcessorCount();
     }
     std::cout << "Using " << numThreads << " server threads" << std::endl;
+    
+    // Log service configuration
+    std::cout << "Service Configuration:" << std::endl;
+    std::cout << "  Current Location: " << serviceConfig.currentLocation << std::endl;
+    std::cout << "  Configuration Store: " << serviceConfig.configurationStore << std::endl;
+    std::cout << "  Configuration Container: " << serviceConfig.configurationContainer << std::endl;
+    std::cout << "  Domain Suffix: " << serviceConfig.domainSuffix << std::endl;
+    std::cout << "  Configuration Store URL: " << serviceConfig.GetConfigurationStoreUrl() << std::endl;
     
     // Enable gRPC verbose logging if environment variable is set
     const char* grpcVerbose = std::getenv("GRPC_VERBOSITY");
@@ -110,15 +120,15 @@ void RunServer(const std::string& serverAddress,
         std::cout << "gRPC trace enabled: " << grpcTrace << std::endl;
     }
     
-    // Create AccountResolver with configuration
-    kvstore::AccountResolverConfig resolverConfig;
-    resolverConfig.blobDnsSuffix = blobDnsSuffix;
+    // Create StorageDatabaseResolver with configuration
+    kvstore::StorageDatabaseResolverConfig resolverConfig;
+    resolverConfig.serviceConfig = serviceConfig;
     resolverConfig.httpTransport = transport;
     resolverConfig.enableSdkLogging = enableSdkLogging;
     resolverConfig.enableMultiNic = enableMultiNic;
     resolverConfig.logLevel = logLevel;
     
-    auto accountResolver = std::make_shared<kvstore::InMemoryAccountResolver>(resolverConfig);
+    auto accountResolver = std::make_shared<kvstore::StorageDatabaseResolver>(resolverConfig);
     
     // Set up logging callback for the resolver
     accountResolver->SetLogCallback([logLevel](LogLevel level, const std::string& message) {
@@ -128,6 +138,13 @@ void RunServer(const std::string& serverAddress,
             std::cout << "[INFO] " << message << std::endl;
         }
     });
+    
+    // Initialize the resolver (connects to config store)
+    if (!accountResolver->Initialize()) {
+        std::cerr << "Failed to initialize account resolver: " << accountResolver->GetLastError() << std::endl;
+        return;
+    }
+    std::cout << "Account resolver initialized successfully" << std::endl;
     
     // Create service with account resolver
     kvstore::KVStoreServiceImpl service(accountResolver);
@@ -197,10 +214,10 @@ void RunServer(const std::string& serverAddress,
     std::cout << "KV Store gRPC Service" << std::endl;
     std::cout << "==================================================" << std::endl;
     std::cout << "Server listening on: " << serverAddress << std::endl;
+    std::cout << "Account Resolver: StorageDatabaseResolver" << std::endl;
     std::cout << "Log Level: " << (logLevel == LogLevel::Error ? "Error" : 
                                    logLevel == LogLevel::Information ? "Information" : "Verbose") << std::endl;
     std::cout << "HTTP Transport: " << (transport == HttpTransportProtocol::WinHTTP ? "WinHTTP" : "LibCurl") << std::endl;
-    std::cout << "Blob DNS Suffix: " << blobDnsSuffix << std::endl;
     std::cout << "SDK Logging: " << (enableSdkLogging ? "Enabled" : "Disabled") << std::endl;
     std::cout << "Multi-NIC: " << (enableMultiNic ? "Enabled" : "Disabled") << std::endl;
     std::cout << "Metrics Logging: " << (enableMetricsLogging ? "Enabled" : "Disabled") << std::endl;
@@ -216,12 +233,12 @@ void RunServer(const std::string& serverAddress,
 void PrintUsage(const char* programName) {
     std::cout << "Usage: " << programName << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
+    std::cout << "  --config FILE                 Path to service configuration JSON file (default: service-config.json)" << std::endl;
     std::cout << "  --port PORT                   Port to listen on (default: 50051)" << std::endl;
     std::cout << "  --host HOST                   Host to bind to (default: 0.0.0.0)" << std::endl;
     std::cout << "  --threads NUM                 Number of server threads (default: auto-detect CPU count)" << std::endl;
     std::cout << "  --log-level LEVEL             Log level: error, info, verbose (default: info)" << std::endl;
     std::cout << "  --transport TRANSPORT         HTTP transport: winhttp, libcurl (default: libcurl)" << std::endl;
-    std::cout << "  --blob-dns-suffix SUFFIX      Blob DNS suffix (default: .blob.core.windows.net)" << std::endl;
     std::cout << "  --enable-sdk-logging          Enable Azure SDK logging (default: disabled)" << std::endl;
     std::cout << "  --disable-multi-nic           Disable multi-NIC support (default: enabled)" << std::endl;
     std::cout << "  --disable-metrics             Disable JSON metrics logging to console (default: enabled)" << std::endl;
@@ -246,7 +263,7 @@ int main(int argc, char** argv) {
     bool enableMetricsLogging = true;  // Default: enabled
     std::string metricsEndpoint;
     std::string instrumentationKey;
-    std::string blobDnsSuffix = ".blob.core.windows.net";
+    std::string configFilePath = "service-config.json";
     
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -254,6 +271,9 @@ int main(int argc, char** argv) {
         if (arg == "--help" || arg == "-h") {
             PrintUsage(argv[0]);
             return 0;
+        }
+        else if (arg == "--config" && i + 1 < argc) {
+            configFilePath = argv[++i];
         }
         else if (arg == "--port" && i + 1 < argc) {
             port = std::stoi(argv[++i]);
@@ -297,9 +317,6 @@ int main(int argc, char** argv) {
         else if (arg == "--disable-metrics") {
             enableMetricsLogging = false;
         }
-        else if (arg == "--blob-dns-suffix" && i + 1 < argc) {
-            blobDnsSuffix = argv[++i];
-        }
         else if (arg == "--metrics-endpoint" && i + 1 < argc) {
             metricsEndpoint = argv[++i];
         }
@@ -313,6 +330,17 @@ int main(int argc, char** argv) {
         }
     }
     
+    // Load service configuration
+    std::cout << "Loading configuration from: " << configFilePath << std::endl;
+    kvstore::FileConfigProvider configProvider(configFilePath);
+    if (!configProvider.Load()) {
+        std::cerr << "Failed to load configuration: " << configProvider.GetLastError() << std::endl;
+        return 1;
+    }
+    
+    const kvstore::ServiceConfig& serviceConfig = configProvider.GetConfig();
+    std::cout << "Configuration loaded successfully" << std::endl;
+    
     std::string serverAddress = host + ":" + std::to_string(port);
     
     // Initialize Azure Monitor metrics if endpoint provided
@@ -324,7 +352,7 @@ int main(int argc, char** argv) {
     }
     
     try {
-        RunServer(serverAddress, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging, numThreads, blobDnsSuffix);
+        RunServer(serverAddress, serviceConfig, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging, numThreads);
     } catch (const std::exception& e) {
         std::cerr << "Server error: " << e.what() << std::endl;
         return 1;
