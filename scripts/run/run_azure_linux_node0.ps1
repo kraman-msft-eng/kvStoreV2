@@ -9,4 +9,4 @@ Write-Host "Linux VM: $linuxVM" -ForegroundColor Yellow
 Write-Host "Server: $serverIP" -ForegroundColor Yellow
 Write-Host ""
 
-ssh -i $sshKey azureuser@$linuxVM "cd ~/kvgrpc && export KVSTORE_GRPC_SERVER='$serverIP' && export GRPC_VERBOSITY=error && ./KVPlayground conversation_tokens.json 1000 10 -s https://aoaikv.blob.core.windows.net -c gpt41-promptcache --log-level error"
+ssh -i $sshKey azureuser@$linuxVM "cd ~/kvgrpc && export KVSTORE_GRPC_SERVER='$serverIP' && export GRPC_VERBOSITY=error && ./KVPlayground conversation_tokens.json 10000 10 -s https://aoaikv.prompts.azure.net -c gpt41-promptcache --log-level error"
