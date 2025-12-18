@@ -7,13 +7,16 @@ This directory contains detailed documentation for the KV Store Service.
 | Document | Description |
 |----------|-------------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, multi-region deployment, and component diagrams |
+| [TOPOLOGY.md](TOPOLOGY.md) | Regional data plane topology, storage accounts, UAMI permissions, VNet peering |
 | [LATENCY_METRICS.md](LATENCY_METRICS.md) | How latency metrics are calculated with visual diagrams |
 | [GRPC_OPTIMIZATIONS.md](GRPC_OPTIMIZATIONS.md) | gRPC performance tuning details |
 | [AZURE_MONITOR_SETUP.md](AZURE_MONITOR_SETUP.md) | Azure Monitor integration |
+| [SFMC_PRIVATE_CONNECTIVITY_RUNBOOK.md](SFMC_PRIVATE_CONNECTIVITY_RUNBOOK.md) | Service Fabric Managed Cluster private connectivity setup |
 
 ## Quick Links
 
 - **Getting Started**: See the main [README.md](../README.md)
 - **Architecture Overview**: See [ARCHITECTURE.md](ARCHITECTURE.md)
+- **Regional Topology**: See [TOPOLOGY.md](TOPOLOGY.md)
 - **Latency Metrics**: See [LATENCY_METRICS.md](LATENCY_METRICS.md)
 - **Performance Tuning**: See [GRPC_OPTIMIZATIONS.md](GRPC_OPTIMIZATIONS.md)

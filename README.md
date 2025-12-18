@@ -255,29 +255,26 @@ The gRPC protocol is defined in `protos/kvstore.proto`:
 KVStoreV2/
 ├── CMakeLists.txt              # Root build file (Linux)
 ├── README.md                   # This file
+├── config/                     # Region and cluster configuration
+│   └── <region>/               # Per-region configs
+│       ├── region.config.json  # Shared regional settings
+│       └── <cluster>.config.json # Per-cluster settings
 ├── docs/                       # Documentation
 │   ├── ARCHITECTURE.md         # System architecture
-│   ├── QUICKSTART.md           # Quick start guide
-│   ├── SETUP-SUMMARY.md        # Setup summary
+│   ├── TOPOLOGY.md             # Regional data plane topology
+│   ├── LATENCY_METRICS.md      # Latency metrics
+│   ├── GRPC_OPTIMIZATIONS.md   # gRPC tuning
 │   └── ...                     # Other docs
 ├── scripts/                    # All scripts organized by function
-│   ├── init/                   # Initialization and build scripts
-│   │   ├── init_repo.ps1
-│   │   ├── init_repo.sh
-│   │   └── build_linux.sh
-│   ├── deploy/                 # Deployment scripts
-│   │   ├── deploy_all.ps1
-│   │   ├── deploy_server.ps1
-│   │   ├── deploy_client.ps1
-│   │   └── deploy-linux-client.ps1
-│   ├── run/                    # Run scripts
-│   │   ├── run_azure_linux.ps1
-│   │   ├── run_azure_linux_node0.ps1
-│   │   ├── run_azure_linux_node1.ps1
-│   │   ├── run_azure_linux_both.ps1
-│   │   ├── runLocal.ps1
-│   │   └── run_local_wsl.sh
-│   └── README.md
+│   ├── dataplane/              # Data plane deployment scripts
+│   │   ├── SetupDataPlaneRegion.ps1  # Create shared regional assets
+│   │   ├── AddCluster.ps1      # Create SF managed cluster
+│   │   ├── DeployApp.ps1       # Deploy KVStoreServer app
+│   │   ├── AddClientVNetToRegion.ps1 # VNet peering (service side)
+│   │   └── PeerToPromptService.ps1   # VNet peering (customer side)
+│   ├── deploy/                 # Legacy deployment scripts
+│   ├── init/                   # Initialization scripts
+│   └── run/                    # Test/run scripts
 ├── KVService/                  # Windows gRPC service
 │   ├── src/
 │   │   ├── server.cpp

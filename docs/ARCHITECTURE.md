@@ -656,6 +656,33 @@ The following diagram shows the internal architecture of a single VM within a cl
 
 ---
 
+## Current Deployment Model
+
+The KV Store Service is deployed using **Service Fabric Managed Clusters (SFMC)** with the **BYOVNET + BYOLB** pattern (Bring Your Own VNet + Bring Your Own Load Balancer).
+
+### Key Components
+
+| Component | Description |
+|-----------|-------------|
+| **SF Managed Cluster** | Standard SKU with 2 node types (System + App) |
+| **System Node Type** | 5 VMs for SF system services, public LB for management |
+| **App Node Type** | 3+ VMs running KVStoreServer, internal LB for gRPC traffic |
+| **Internal Load Balancer** | Regional endpoint (e.g., `10.0.0.4:8085`) for private access |
+| **VNet Peering** | Customers connect via VNet peering (no public internet) |
+| **UAMI** | User-Assigned Managed Identity for storage access |
+
+### Customer Connectivity
+
+Customers connect via **VNet peering** instead of Private Link (PLINK):
+
+```
+Customer VNet ──VNet Peering──► KVStore VNet ──► Internal LB ──► App VMs
+```
+
+For detailed topology, see [TOPOLOGY.md](TOPOLOGY.md).
+
+---
+
 ## Deployment Topology
 
 ```
@@ -852,4 +879,4 @@ The following diagram shows the internal architecture of a single VM within a cl
 
 ---
 
-*Last updated: December 2024*
+*Last updated: December 2025*
