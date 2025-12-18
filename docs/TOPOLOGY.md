@@ -60,17 +60,33 @@ The KVStore data plane is organized into **regions**, each containing shared inf
 
 Each region contains shared infrastructure that is used by all clusters in that region.
 
-### 1. Storage Account
+### 1. Prompt Metadata Storage Account
 
-The regional storage account stores configuration metadata and is accessed by all clusters.
+The regional **prompt metadata storage account** stores configuration metadata and is accessed by all clusters.
 
 | Property | Example Value |
 |----------|---------------|
 | Name | `promptdatawestus2` |
+| Resource Group | `azureprompt_dp` |
 | Container | `dataplane-metadata` |
-| Purpose | Cluster configuration, routing tables |
+| Purpose | Cluster configs, routing tables, customer mappings |
+| Access | UAMI with Storage Blob Data Contributor |
 
-### 2. User-Assigned Managed Identity (UAMI)
+### 2. User Content Storage Accounts
+
+User-generated content (KV data) is stored in **customer-specific storage accounts** in a dedicated resource group. This separation provides:
+- Isolation of customer data
+- Independent scaling per customer
+- Simplified access control
+
+| Property | Example Value |
+|----------|---------------|
+| Resource Group | `promptservice-regional-storage-westus2` |
+| Storage Accounts | One per customer (e.g., `customerAstorage`, `customerBstorage`) |
+| Purpose | Customer KV data (keys, values, embeddings) |
+| Access | UAMI with Storage Blob Data Contributor |
+
+### 3. User-Assigned Managed Identity (UAMI)
 
 A shared managed identity that Service Fabric clusters use to access Azure resources.
 
@@ -78,39 +94,64 @@ A shared managed identity that Service Fabric clusters use to access Azure resou
 |----------|---------------|
 | Name | `kvstore-svc-westus2` |
 | Client ID | `4c1be51a-e029-46b7-a595-360d4628454a` |
-| Permissions | Storage Blob Data Contributor, Key Vault Secrets User |
+| Resource Group | `azureprompt_dp` |
 
-### 3. Key Vault
+#### UAMI Role Assignments
+
+The UAMI is granted permissions across multiple resource groups:
+
+| Scope | Role | Purpose |
+|-------|------|---------|  
+| `promptdatawestus2` (storage) | Storage Blob Data Contributor | Read/write dataplane metadata |
+| `promptservice-regional-storage-westus2` (RG) | Storage Blob Data Contributor | Read/write all customer storage accounts |
+| `kvstore-kv-westus2` (key vault) | Key Vault Secrets User | Read certificates and secrets |
+
+> **Note**: The UAMI is assigned to the entire `promptservice-regional-storage-westus2` resource group, which automatically grants access to all current and future customer storage accounts in that RG.
+
+### 4. Key Vault
 
 Stores certificates and secrets for cluster authentication.
 
 | Property | Example Value |
 |----------|---------------|
 | Name | `kvstore-kv-westus2` |
+| Resource Group | `azureprompt_dp` |
 | Server Cert | Used by SF clusters for management |
 | Client Cert | Used by deployment scripts |
 
-### 4. Virtual Network (VNet)
+### 5. Virtual Network (VNet)
 
 A dedicated VNet for the KVStore data plane in each region.
 
 | Property | Example Value |
 |----------|---------------|
 | Name | `kvstore-vnet-westus2` |
+| Resource Group | `azureprompt_dp` |
 | Address Space | `10.0.0.0/16` |
 | Subnet | `kvstore-subnet` (`10.0.0.0/24`) |
 | NSG | `kvstore-nsg-westus2` |
 
-### 5. Internal Load Balancer (ILB)
+### 6. Internal Load Balancer (ILB)
 
 A shared internal load balancer that provides the regional private endpoint.
 
 | Property | Example Value |
 |----------|---------------|
 | Name | `kvs-wus2-01-ilb` |
+| Resource Group | `azureprompt_dp` |
 | Private IP | `10.0.0.4` |
 | Port | `8085` (gRPC) |
 | Backend Pool | All App node VMs from all clusters |
+
+## Resource Group Summary
+
+The regional infrastructure spans multiple resource groups:
+
+| Resource Group | Purpose | Contents |
+|----------------|---------|----------|
+| `azureprompt_dp` | Dataplane infrastructure | VNet, ILB, Key Vault, UAMI, Prompt Metadata Storage, SF Clusters |
+| `promptservice-regional-storage-westus2` | User content storage | Per-customer storage accounts |
+| `SFC_<cluster-guid>` | SF managed resources | VMSS, managed disks (auto-created by SF) |
 
 ## Service Fabric Cluster Architecture
 
