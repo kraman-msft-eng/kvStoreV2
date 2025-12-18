@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <cstdlib>
 #include <csignal>
 #include <thread>
 
@@ -16,6 +17,28 @@
 #endif
 
 std::unique_ptr<grpc::Server> g_server;
+
+static std::string GetEnvVar(const char* name) {
+    const char* value = std::getenv(name);
+    return value ? std::string(value) : std::string();
+}
+
+static bool TryParseInt(const std::string& value, int& out) {
+    if (value.empty()) {
+        return false;
+    }
+    try {
+        size_t idx = 0;
+        int parsed = std::stoi(value, &idx);
+        if (idx != value.size()) {
+            return false;
+        }
+        out = parsed;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
 
 // Get total processor count across all NUMA nodes/processor groups
 int GetTotalProcessorCount() {
@@ -77,6 +100,37 @@ void EnableAllNumaNodes() {
 #endif
 }
 
+#ifdef _WIN32
+bool PinToProcessorGroup(int groupIndex) {
+    if (groupIndex < 0) {
+        return true;
+    }
+
+    WORD groupCount = GetActiveProcessorGroupCount();
+    if (groupCount == 0) {
+        std::cerr << "GetActiveProcessorGroupCount returned 0" << std::endl;
+        return false;
+    }
+
+    if (groupIndex >= static_cast<int>(groupCount)) {
+        std::cerr << "Requested processor group " << groupIndex << " but only " << groupCount << " group(s) are active" << std::endl;
+        return false;
+    }
+
+    GROUP_AFFINITY affinity = {};
+    affinity.Group = static_cast<WORD>(groupIndex);
+    affinity.Mask = ~0ULL;  // all CPUs in the group
+
+    if (!SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr)) {
+        std::cerr << "SetThreadGroupAffinity failed (group " << groupIndex << ")" << std::endl;
+        return false;
+    }
+
+    std::cout << "Pinned main thread to processor group " << groupIndex << std::endl;
+    return true;
+}
+#endif
+
 void SignalHandler(int signal) {
     std::cout << "\nReceived signal " << signal << ", shutting down gracefully..." << std::endl;
     if (g_server) {
@@ -91,10 +145,15 @@ void RunServer(const std::string& serverAddress,
                bool enableSdkLogging = true,
                bool enableMultiNic = false,
                bool enableMetricsLogging = true,
-               int numThreads = 0) {
+               int numThreads = 0,
+               bool enableNumaSpread = true) {
     
     // Report NUMA topology
-    EnableAllNumaNodes();
+    if (enableNumaSpread) {
+        EnableAllNumaNodes();
+    } else {
+        std::cout << "NUMA spread disabled (process should stay within a single NUMA node if constrained externally)" << std::endl;
+    }
     
     // Determine thread count - use all processors across all NUMA nodes
     if (numThreads <= 0) {
@@ -241,6 +300,8 @@ void PrintUsage(const char* programName) {
     std::cout << "  --transport TRANSPORT         HTTP transport: winhttp, libcurl (default: libcurl)" << std::endl;
     std::cout << "  --enable-sdk-logging          Enable Azure SDK logging (default: disabled)" << std::endl;
     std::cout << "  --disable-multi-nic           Disable multi-NIC support (default: enabled)" << std::endl;
+    std::cout << "  --disable-numa-spread         Do not attempt to spread threads across NUMA nodes (default: enabled)" << std::endl;
+    std::cout << "  --processor-group N           Pin main thread to Windows processor group N (NUMA-style); implies --disable-numa-spread" << std::endl;
     std::cout << "  --disable-metrics             Disable JSON metrics logging to console (default: enabled)" << std::endl;
     std::cout << "  --metrics-endpoint ENDPOINT   Azure Monitor OTLP endpoint (optional)" << std::endl;
     std::cout << "  --instrumentation-key KEY     Application Insights instrumentation key (optional)" << std::endl;
@@ -260,10 +321,16 @@ int main(int argc, char** argv) {
     HttpTransportProtocol transport = HttpTransportProtocol::LibCurl;
     bool enableSdkLogging = false;  // Default: disabled for cleaner output
     bool enableMultiNic = true;
+    bool enableNumaSpread = true;
+    int processorGroup = -1;
     bool enableMetricsLogging = true;  // Default: enabled
     std::string metricsEndpoint;
     std::string instrumentationKey;
     std::string configFilePath = "service-config.json";
+
+    bool hostExplicit = false;
+    bool portExplicit = false;
+    bool processorGroupExplicit = false;
     
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -277,9 +344,11 @@ int main(int argc, char** argv) {
         }
         else if (arg == "--port" && i + 1 < argc) {
             port = std::stoi(argv[++i]);
+            portExplicit = true;
         }
         else if (arg == "--host" && i + 1 < argc) {
             host = argv[++i];
+            hostExplicit = true;
         }
         else if (arg == "--threads" && i + 1 < argc) {
             numThreads = std::stoi(argv[++i]);
@@ -314,6 +383,14 @@ int main(int argc, char** argv) {
         else if (arg == "--disable-multi-nic") {
             enableMultiNic = false;
         }
+        else if (arg == "--disable-numa-spread") {
+            enableNumaSpread = false;
+        }
+        else if (arg == "--processor-group" && i + 1 < argc) {
+            processorGroup = std::stoi(argv[++i]);
+            enableNumaSpread = false;
+            processorGroupExplicit = true;
+        }
         else if (arg == "--disable-metrics") {
             enableMetricsLogging = false;
         }
@@ -329,17 +406,66 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
-    
-    // Load service configuration
-    std::cout << "Loading configuration from: " << configFilePath << std::endl;
-    kvstore::FileConfigProvider configProvider(configFilePath);
-    if (!configProvider.Load()) {
-        std::cerr << "Failed to load configuration: " << configProvider.GetLastError() << std::endl;
-        return 1;
+
+    // Environment-driven overrides (used by Service Fabric app parameters)
+    if (!hostExplicit) {
+        std::string bindIp = GetEnvVar("KV_BIND_IP");
+        if (!bindIp.empty()) {
+            host = bindIp;
+        }
+    }
+    if (!portExplicit) {
+        int envPort = 0;
+        if (TryParseInt(GetEnvVar("KV_PORT"), envPort) && envPort > 0 && envPort <= 65535) {
+            port = envPort;
+        }
+    }
+    if (!processorGroupExplicit) {
+        int envGroup = -1;
+        if (TryParseInt(GetEnvVar("KV_PROCESSOR_GROUP"), envGroup)) {
+            processorGroup = envGroup;
+            if (processorGroup >= 0) {
+                enableNumaSpread = false;
+            }
+        }
     }
     
-    const kvstore::ServiceConfig& serviceConfig = configProvider.GetConfig();
-    std::cout << "Configuration loaded successfully" << std::endl;
+    // Load service configuration (file first, then env var fallback/overrides)
+    kvstore::ServiceConfig serviceConfig;
+    {
+        std::cout << "Loading configuration from: " << configFilePath << std::endl;
+        kvstore::FileConfigProvider configProvider(configFilePath);
+        if (configProvider.Load()) {
+            serviceConfig = configProvider.GetConfig();
+            std::cout << "Configuration loaded successfully" << std::endl;
+        } else {
+            std::cerr << "Failed to load configuration file: " << configProvider.GetLastError() << std::endl;
+            std::cerr << "Attempting to use environment variables instead..." << std::endl;
+        }
+
+        std::string envCurrentLocation = GetEnvVar("KV_CURRENT_LOCATION");
+        if (!envCurrentLocation.empty()) {
+            serviceConfig.currentLocation = envCurrentLocation;
+        }
+        std::string envConfigurationStore = GetEnvVar("KV_CONFIGURATION_STORE");
+        if (!envConfigurationStore.empty()) {
+            serviceConfig.configurationStore = envConfigurationStore;
+        }
+        std::string envConfigurationContainer = GetEnvVar("KV_CONFIGURATION_CONTAINER");
+        if (!envConfigurationContainer.empty()) {
+            serviceConfig.configurationContainer = envConfigurationContainer;
+        }
+        std::string envDomainSuffix = GetEnvVar("KV_DOMAIN_SUFFIX");
+        if (!envDomainSuffix.empty()) {
+            serviceConfig.domainSuffix = envDomainSuffix;
+        }
+    }
+
+    if (!serviceConfig.IsValid()) {
+        std::cerr << "Service configuration is invalid: " << serviceConfig.GetValidationError() << std::endl;
+        std::cerr << "Provide a valid config file via --config or set env vars KV_CURRENT_LOCATION, KV_CONFIGURATION_STORE, KV_CONFIGURATION_CONTAINER (and optionally KV_DOMAIN_SUFFIX)." << std::endl;
+        return 1;
+    }
     
     std::string serverAddress = host + ":" + std::to_string(port);
     
@@ -352,7 +478,14 @@ int main(int argc, char** argv) {
     }
     
     try {
-        RunServer(serverAddress, serviceConfig, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging, numThreads);
+#ifdef _WIN32
+        if (processorGroup >= 0) {
+            if (!PinToProcessorGroup(processorGroup)) {
+                return 1;
+            }
+        }
+#endif
+        RunServer(serverAddress, serviceConfig, logLevel, transport, enableSdkLogging, enableMultiNic, enableMetricsLogging, numThreads, enableNumaSpread);
     } catch (const std::exception& e) {
         std::cerr << "Server error: " << e.what() << std::endl;
         return 1;
