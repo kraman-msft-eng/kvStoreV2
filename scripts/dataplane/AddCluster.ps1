@@ -29,7 +29,8 @@
     VM size for system/primary node type (default: Standard_D2s_v5 - smaller for system services only)
 
 .PARAMETER AppVmSize
-    VM size for application node type (default: Standard_D2ds_v5)
+    VM size for application node type (default: Standard_E80ids_v4)
+    This isolated VM offers 80 vCPUs, 80 Gbps network, 2 NUMA nodes for dual-process pinning.
     Only used in BYOLB mode.
 
 .PARAMETER SystemVmCount
@@ -79,7 +80,7 @@ param(
     [string]$SystemVmSize = "Standard_D2s_v5",
 
     [Parameter(Mandatory = $false)]
-    [string]$AppVmSize = "Standard_D2ds_v5",
+    [string]$AppVmSize = "Standard_E80ids_v4",
 
     [Parameter(Mandatory = $false)]
     [int]$SystemVmCount = 5,  # Standard SKU requires minimum 5 nodes for primary node type
@@ -240,13 +241,23 @@ if ($UseInternalLoadBalancer) {
             throw "Failed to create internal load balancer"
         }
         
-        # Create health probe for gRPC port
+        # Create health probes for gRPC ports (dual NUMA - port 8085 for NUMA node 0, port 8086 for NUMA node 1)
         az network lb probe create `
             --name "grpcHealthProbe" `
             --lb-name $internalLbName `
             --resource-group $resourceGroupName `
             --protocol Tcp `
             --port 8085 `
+            --interval 5 `
+            --threshold 2 `
+            --output none
+        
+        az network lb probe create `
+            --name "grpcHealthProbe8086" `
+            --lb-name $internalLbName `
+            --resource-group $resourceGroupName `
+            --protocol Tcp `
+            --port 8086 `
             --interval 5 `
             --threshold 2 `
             --output none
@@ -263,7 +274,7 @@ if ($UseInternalLoadBalancer) {
             --backend-port 3389 `
             --output none
         
-        # Create load balancing rule for gRPC
+        # Create load balancing rules for gRPC (dual NUMA processes on ports 8085 and 8086)
         az network lb rule create `
             --name "grpcLbRule" `
             --lb-name $internalLbName `
@@ -278,7 +289,21 @@ if ($UseInternalLoadBalancer) {
             --enable-tcp-reset true `
             --output none
         
-        Write-Host "Created internal load balancer with gRPC rule on port 8085"
+        az network lb rule create `
+            --name "grpcLbRule8086" `
+            --lb-name $internalLbName `
+            --resource-group $resourceGroupName `
+            --frontend-ip-name "internalFrontend" `
+            --backend-pool-name "appBackendPool" `
+            --protocol Tcp `
+            --frontend-port 8086 `
+            --backend-port 8086 `
+            --probe-name "grpcHealthProbe8086" `
+            --idle-timeout 30 `
+            --enable-tcp-reset true `
+            --output none
+        
+        Write-Host "Created internal load balancer with gRPC rules on ports 8085 and 8086 (dual NUMA)"
         
         $ilbJson = az network lb show --name $internalLbName --resource-group $resourceGroupName
     } else {
@@ -561,9 +586,9 @@ if ($UseInternalLoadBalancer) {
 # Get cluster VMSS infrastructure RG
 Write-Host "Service Fabric infrastructure RG: $sfInfraRg"
 
-# Add NSG rule for gRPC port (only for non-BYOLB mode, BYOLB gets its own NSG)
+# Add NSG rules for gRPC ports (only for non-BYOLB mode, BYOLB gets its own NSG)
 if (-not $UseInternalLoadBalancer) {
-    Write-Step "Configuring NSG for gRPC port"
+    Write-Step "Configuring NSG for gRPC ports"
     $nsgList = az network nsg list --resource-group $sfInfraRg --query "[0].name" -o tsv 2>$null
     if ($nsgList) {
         az network nsg rule create `
@@ -576,7 +601,17 @@ if (-not $UseInternalLoadBalancer) {
             --protocol Tcp `
             --destination-port-ranges 8085 `
             --output none 2>$null
-        Write-Host "Added NSG rule for port 8085"
+        az network nsg rule create `
+            --nsg-name $nsgList `
+            --resource-group $sfInfraRg `
+            --name "Allow-gRPC-8086" `
+            --priority 1101 `
+            --direction Inbound `
+            --access Allow `
+            --protocol Tcp `
+            --destination-port-ranges 8086 `
+            --output none 2>$null
+        Write-Host "Added NSG rules for ports 8085 and 8086 (dual NUMA)"
     }
 }
 
@@ -604,7 +639,7 @@ foreach ($vmss in $vmssList) {
 
 # For BYOLB, also configure NSG on the app node type's NSG
 if ($UseInternalLoadBalancer -and $nodeIps.Count -gt 0) {
-    Write-Step "Configuring NSG for App Node Type"
+    Write-Step "Configuring NSG for App Node Type (dual NUMA ports)"
     # BYOLB creates a separate NSG for each node type
     $appNsgList = az network nsg list --resource-group $sfInfraRg --query "[?contains(name, '$AppNodeTypeName') || contains(name, 'App')].name" -o tsv 2>$null
     if ($appNsgList) {
@@ -619,7 +654,17 @@ if ($UseInternalLoadBalancer -and $nodeIps.Count -gt 0) {
                 --protocol Tcp `
                 --destination-port-ranges 8085 `
                 --output none 2>$null
-            Write-Host "Added NSG rule for port 8085 to NSG: $nsgName"
+            az network nsg rule create `
+                --nsg-name $nsgName `
+                --resource-group $sfInfraRg `
+                --name "Allow-gRPC-8086" `
+                --priority 1101 `
+                --direction Inbound `
+                --access Allow `
+                --protocol Tcp `
+                --destination-port-ranges 8086 `
+                --output none 2>$null
+            Write-Host "Added NSG rules for ports 8085 and 8086 to NSG: $nsgName (dual NUMA)"
         }
     }
 }
