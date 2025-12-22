@@ -31,7 +31,7 @@ The KVStore data plane is organized into **regions**, each containing shared inf
 │  │  │                    ┌────────▼────────┐                             │  │  │
 │  │  │                    │  Internal LB    │                             │  │  │
 │  │  │                    │  (Regional)     │                             │  │  │
-│  │  │                    │  10.0.0.4:8085  │                             │  │  │
+│  │  │                    │ 10.0.0.4:8085/6 │                             │  │  │
 │  │  │                    └────────┬────────┘                             │  │  │
 │  │  │                             │                                      │  │  │
 │  │  └─────────────────────────────┼──────────────────────────────────────┘  │  │
@@ -140,7 +140,7 @@ A shared internal load balancer that provides the regional private endpoint.
 | Name | `kvs-wus2-01-ilb` |
 | Resource Group | `azureprompt_dp` |
 | Private IP | `10.0.0.4` |
-| Port | `8085` (gRPC) |
+| Ports | `8085` (gRPC NUMA 0), `8086` (gRPC NUMA 1) |
 | Backend Pool | All App node VMs from all clusters |
 
 ## Resource Group Summary
@@ -167,7 +167,8 @@ Clusters are deployed INTO the shared regional VNet using the `subnetId` propert
 ### BYOLB (Bring Your Own Load Balancer)
 
 The App node type uses `frontendConfigurations` to point to the shared internal load balancer:
-- Traffic on port 8085 is distributed across all App node VMs
+- Traffic on ports 8085 and 8086 is distributed across all App node VMs
+- Each VM runs two KVStoreServer processes pinned to separate NUMA nodes
 - Default 5-tuple hash load distribution
 - Health probes ensure only healthy nodes receive traffic
 
@@ -178,7 +179,9 @@ Each cluster has two node types:
 | Node Type | Purpose | VM Size | Count | Load Balancer |
 |-----------|---------|---------|-------|---------------|
 | **System** | SF system services | Standard_D2s_v5 | 5 | Public (SF managed) |
-| **App** | KVStoreServer application | Standard_D2ds_v5 | 3+ | Internal (BYOLB) |
+| **App** | KVStoreServer application | Standard_E80ids_v4 | 1+ | Internal (BYOLB) |
+
+> **Note**: The App node type uses `Standard_E80ids_v4` isolated VMs with 80 vCPUs, 80 Gbps network, and 2 NUMA nodes. Each VM runs two KVStoreServer processes, one pinned to each NUMA node (port 8085 for NUMA 0, port 8086 for NUMA 1).
 
 ### Cluster Configuration
 
@@ -196,9 +199,9 @@ Each cluster has two node types:
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │                App Node Type                           │  │
-│  │  • 3+ VMs (Standard_D2ds_v5)                           │  │
-│  │  • Runs KVStoreServer application                      │  │
-│  │  • Internal LB for gRPC (:8085)                        │  │
+│  │  • 1+ VMs (Standard_E80ids_v4 - 80 cores, 2 NUMA)      │  │
+│  │  • Runs 2x KVStoreServer per VM (NUMA-pinned)          │  │
+│  │  • Internal LB for gRPC (:8085 NUMA0, :8086 NUMA1)     │  │
 │  │  • frontendConfigurations → kvs-wus2-01-ilb            │  │
 │  │  • useDefaultPublicLoadBalancer: true (outbound only)  │  │
 │  └────────────────────────────────────────────────────────┘  │
@@ -240,18 +243,22 @@ Customers connect to the KVStore service via **VNet peering** to access the priv
 |-------------|-------------|
 | **No Overlapping Address Space** | Customer VNet must not use the same CIDR as the KVStore VNet or any other peered VNet |
 | **Network Contributor** | Both parties need Network Contributor on their respective VNets |
-| **NSG Rules** | Customer NSG must allow outbound TCP to port 8085 |
+| **NSG Rules** | Customer NSG must allow outbound TCP to ports 8085 and 8086 |
 
 ### Example Endpoint Access
 
 After peering is complete, customers can access the service:
 
 ```bash
-# From customer's VM
+# From customer's VM (NUMA node 0 - port 8085)
 ./KVClient 10.0.0.4:8085
 
-# gRPC endpoint
-grpc://10.0.0.4:8085
+# From customer's VM (NUMA node 1 - port 8086)  
+./KVClient 10.0.0.4:8086
+
+# gRPC endpoints
+grpc://10.0.0.4:8085  # NUMA 0
+grpc://10.0.0.4:8086  # NUMA 1
 ```
 
 ## Configuration Files
@@ -410,7 +417,7 @@ To add a new region:
 
 2. **Cannot Connect to Internal LB**
    - Verify VNet peering is in "Connected" state on both sides
-   - Check NSG allows outbound TCP on port 8085
+   - Check NSG allows outbound TCP on ports 8085 and 8086
    - Verify internal LB health probe is passing
 
 3. **Application Not Responding**
@@ -431,5 +438,5 @@ az network lb address-pool show --lb-name kvs-wus2-01-ilb --resource-group azure
 az network vnet peering list --resource-group azureprompt_dp --vnet-name kvstore-vnet-westus2
 
 # Test connectivity from peered VNet
-./KVClient 10.0.0.4:8085
+./KVClient 10.0.0.4:8085  # or :8086 for NUMA node 1
 ```
