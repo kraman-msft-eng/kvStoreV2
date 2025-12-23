@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ServiceManifest Name="KVStoreServerNode1Pkg" Version="1.0.21" xmlns="http://schemas.microsoft.com/2011/01/fabric" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Description>KVStore Server Service Package - NUMA Node 1 (Port 8086)</Description>
+  
+  <ServiceTypes>
+    <StatelessServiceType ServiceTypeName="KVStoreServerNode1Type" UseImplicitHost="true" />
+  </ServiceTypes>
+  
+  <CodePackage Name="Code" Version="1.0.21">
+    <EntryPoint>
+      <ExeHost>
+        <Program>start.cmd</Program>
+        <Arguments></Arguments>
+        <WorkingFolder>CodePackage</WorkingFolder>
+        <ConsoleRedirection FileRetentionCount="5" FileMaxSizeInKb="20480" />
+      </ExeHost>
+    </EntryPoint>
+    <EnvironmentVariables>
+      <EnvironmentVariable Name="KVSTORE_PORT" Value="8086" />
+      <EnvironmentVariable Name="KVSTORE_NUMA_NODE" Value="1" />
+      <EnvironmentVariable Name="KVSTORE_NIC_INDEX" Value="0" />
+      <EnvironmentVariable Name="KVSTORE_LOG_LEVEL" Value="error" />
+      <EnvironmentVariable Name="AZURE_STORAGE_BLOB_DNS_SUFFIX" Value=".blob.core.windows.net" />
+      <EnvironmentVariable Name="KV_CURRENT_LOCATION" Value="" />
+      <EnvironmentVariable Name="KV_CONFIGURATION_STORE" Value="" />
+      <EnvironmentVariable Name="KV_CONFIGURATION_CONTAINER" Value="" />
+      <EnvironmentVariable Name="AZURE_CLIENT_ID" Value="" />
+    </EnvironmentVariables>
+  </CodePackage>
+  
+  <Resources>
+    <Endpoints>
+      <!-- Node1 on port 8086 (dual-port NUMA architecture) -->
+      <Endpoint Name="KVStoreServerEndpoint" Protocol="tcp" Port="8086" Type="Input" />
+    </Endpoints>
+  </Resources>
+</ServiceManifest>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

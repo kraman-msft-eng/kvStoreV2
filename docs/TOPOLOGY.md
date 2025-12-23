@@ -29,10 +29,11 @@ The KVStore data plane is organized into **regions**, each containing shared inf
 │  │  │          └──────────────────┼──────────────────┘                   │  │  │
 │  │  │                             │                                      │  │  │
 │  │  │                    ┌────────▼────────┐                             │  │  │
-│  │  │                    │  Internal LB    │                             │  │  │
-│  │  │                    │  (Regional)     │                             │  │  │
-│  │  │                    │ 10.0.0.4:8085/6 │                             │  │  │
-│  │  │                    └────────┬────────┘                             │  │  │
+│                    │  Internal LB    │                             │  │  │
+│                    │  (Regional)     │                             │  │  │
+│                    │   10.0.0.4      │                             │  │  │
+│                    │  :8085 / :8086  │                             │  │  │
+│                    └────────┬────────┘                             │  │  │
 │  │  │                             │                                      │  │  │
 │  │  └─────────────────────────────┼──────────────────────────────────────┘  │  │
 │  │                                │                                         │  │
@@ -140,8 +141,15 @@ A shared internal load balancer that provides the regional private endpoint.
 | Name | `kvs-wus2-01-ilb` |
 | Resource Group | `azureprompt_dp` |
 | Private IP | `10.0.0.4` |
-| Ports | `8085` (gRPC NUMA 0), `8086` (gRPC NUMA 1) |
-| Backend Pool | All App node VMs from all clusters |
+| Port (NUMA 0) | `8085` (gRPC) |
+| Port (NUMA 1) | `8086` (gRPC) |
+| Backend Pool | All App node VMs |
+
+> **Note**: Each App VM runs two NUMA-pinned KVStoreServer processes:
+> - **NUMA Node 0** listens on port `8085`
+> - **NUMA Node 1** listens on port `8086`
+>
+> The ILB has separate rules and health probes for each port. Clients connect to either `10.0.0.4:8085` or `10.0.0.4:8086` depending on which NUMA node they want to target.
 
 ## Resource Group Summary
 
@@ -167,10 +175,28 @@ Clusters are deployed INTO the shared regional VNet using the `subnetId` propert
 ### BYOLB (Bring Your Own Load Balancer)
 
 The App node type uses `frontendConfigurations` to point to the shared internal load balancer:
-- Traffic on ports 8085 and 8086 is distributed across all App node VMs
-- Each VM runs two KVStoreServer processes pinned to separate NUMA nodes
+- Traffic on port 8085 is routed to NUMA Node 0 processes
+- Traffic on port 8086 is routed to NUMA Node 1 processes
+- Each VM runs two KVStoreServer processes, each pinned to a NUMA node and listening on its respective port
 - Default 5-tuple hash load distribution
-- Health probes ensure only healthy nodes receive traffic
+- Separate health probes for each port ensure only healthy instances receive traffic
+
+### Dual-Port NUMA Architecture
+
+Instead of multi-NIC binding (which has asymmetric routing issues with Azure LB), we use a **dual-port architecture**:
+
+| NUMA Node | Port | Purpose |
+|-----------|------|---------|  
+| 0 | 8085 | Process pinned to NUMA 0 (40 cores) |
+| 1 | 8086 | Process pinned to NUMA 1 (40 cores) |
+
+This provides:
+- **Full NUMA utilization**: Each NUMA node has dedicated memory and CPU cores
+- **Independent health monitoring**: Each port has its own LB health probe
+- **Simple client targeting**: Clients can choose which NUMA node to target by port
+- **Reliable LB distribution**: No asymmetric routing issues
+
+> **Note**: The previous multi-NIC approach (both NICs on port 8085) didn't work because Azure's health probe (168.63.129.16) only routes via the primary NIC, causing the secondary NIC's health probe to fail.
 
 ### Node Types
 
@@ -181,7 +207,9 @@ Each cluster has two node types:
 | **System** | SF system services | Standard_D2s_v5 | 5 | Public (SF managed) |
 | **App** | KVStoreServer application | Standard_E80ids_v4 | 1+ | Internal (BYOLB) |
 
-> **Note**: The App node type uses `Standard_E80ids_v4` isolated VMs with 80 vCPUs, 80 Gbps network, and 2 NUMA nodes. Each VM runs two KVStoreServer processes, one pinned to each NUMA node (port 8085 for NUMA 0, port 8086 for NUMA 1).
+> **Note**: The App node type uses `Standard_E80ids_v4` isolated VMs with 80 vCPUs, 80 Gbps network, and 2 NUMA nodes. Each VM runs two KVStoreServer processes:
+> - NUMA Node 0 process listens on port 8085
+> - NUMA Node 1 process listens on port 8086
 
 ### Cluster Configuration
 
@@ -197,11 +225,11 @@ Each cluster has two node types:
 │  │  • useDefaultPublicLoadBalancer: true                  │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │                App Node Type                           │  │
+│  │  │                App Node Type                           │  │
 │  │  • 1+ VMs (Standard_E80ids_v4 - 80 cores, 2 NUMA)      │  │
 │  │  • Runs 2x KVStoreServer per VM (NUMA-pinned)          │  │
-│  │  • Internal LB for gRPC (:8085 NUMA0, :8086 NUMA1)     │  │
+│  │  • Port 8085 → NUMA Node 0, Port 8086 → NUMA Node 1   │  │
+│  │  • Internal LB with dual health probes                 │  │
 │  │  • frontendConfigurations → kvs-wus2-01-ilb            │  │
 │  │  • useDefaultPublicLoadBalancer: true (outbound only)  │  │
 │  └────────────────────────────────────────────────────────┘  │
@@ -233,8 +261,8 @@ Customers connect to the KVStore service via **VNet peering** to access the priv
        │         Bidirectional Peering Complete        │
        │◄─────────────────────────────────────────────►│
        │                                               │
-       │  5. Customer accesses 10.0.0.4:8085           │
-       │◄──────────────────────────────────────────────│
+       │  5. Customer accesses 10.0.0.4:8085 or :8086     │
+       │◄──────────────────────────────────────────────────│
 ```
 
 ### Peering Requirements
@@ -250,16 +278,18 @@ Customers connect to the KVStore service via **VNet peering** to access the priv
 After peering is complete, customers can access the service:
 
 ```bash
-# From customer's VM (NUMA node 0 - port 8085)
+# From customer's VM - NUMA Node 0
 ./KVClient 10.0.0.4:8085
 
-# From customer's VM (NUMA node 1 - port 8086)  
+# From customer's VM - NUMA Node 1  
 ./KVClient 10.0.0.4:8086
 
 # gRPC endpoints
 grpc://10.0.0.4:8085  # NUMA 0
 grpc://10.0.0.4:8086  # NUMA 1
 ```
+
+> **Note**: Two ports are exposed to clients (8085 for NUMA Node 0, 8086 for NUMA Node 1). The load balancer distributes traffic for each port to the corresponding NUMA-pinned process on each App VM.
 
 ## Configuration Files
 
@@ -287,7 +317,9 @@ Contains shared regional settings:
   },
   "dataplane": {
     "configStorageAccount": "promptdatawestus2",
-    "grpcPort": 8085
+    "grpcPortNuma0": 8085,
+    "grpcPortNuma1": 8086,
+    "grpcPorts": [8085, 8086]
   }
 }
 ```

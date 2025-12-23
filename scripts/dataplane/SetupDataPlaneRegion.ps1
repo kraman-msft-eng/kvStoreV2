@@ -296,8 +296,18 @@ if ($LASTEXITCODE -ne 0) {
         --location $RegionName `
         --output none
     Write-Host "Created NSG: $nsgName"
-    
-    # Add gRPC port rule
+} else {
+    Write-Host "NSG already exists: $nsgName"
+    $nsgJson = az network nsg show --name $nsgName --resource-group $ResourceGroupName
+}
+
+# Ensure NSG rules exist (idempotent - check before create)
+$nsg = $nsgJson | ConvertFrom-Json
+$existingRules = @($nsg.securityRules | ForEach-Object { $_.name })
+
+# Port 8085: NUMA Node 0 process
+if ($existingRules -notcontains "Allow-gRPC-8085") {
+    Write-Host "Creating NSG rule: Allow-gRPC-8085 (port 8085)"
     az network nsg rule create `
         --nsg-name $nsgName `
         --resource-group $ResourceGroupName `
@@ -308,9 +318,25 @@ if ($LASTEXITCODE -ne 0) {
         --protocol Tcp `
         --destination-port-ranges 8085 `
         --output none
-    Write-Host "Added NSG rule for port 8085"
 } else {
-    Write-Host "NSG already exists: $nsgName"
+    Write-Host "NSG rule already exists: Allow-gRPC-8085"
+}
+
+# Port 8086: NUMA Node 1 process
+if ($existingRules -notcontains "Allow-gRPC-8086") {
+    Write-Host "Creating NSG rule: Allow-gRPC-8086 (port 8086)"
+    az network nsg rule create `
+        --nsg-name $nsgName `
+        --resource-group $ResourceGroupName `
+        --name "Allow-gRPC-8086" `
+        --priority 102 `
+        --direction Inbound `
+        --access Allow `
+        --protocol Tcp `
+        --destination-port-ranges 8086 `
+        --output none
+} else {
+    Write-Host "NSG rule already exists: Allow-gRPC-8086"
 }
 
 # Grant UAMI "Managed Identity Operator" to SF Resource Provider
@@ -409,7 +435,10 @@ $regionConfig = @{
         configStorageAccount = $ConfigStorageAccount
         configContainer = $ConfigContainer
         userContentResourceGroup = $UserContentResourceGroup
-        grpcPort = 8085
+        # Dual-port NUMA deployment: Port 8085 for NUMA 0, Port 8086 for NUMA 1
+        grpcPortNuma0 = 8085
+        grpcPortNuma1 = 8086
+        grpcPorts = @(8085, 8086)
     }
     clusters = @()
 }

@@ -241,7 +241,20 @@ if ($UseInternalLoadBalancer) {
             throw "Failed to create internal load balancer"
         }
         
-        # Create health probes for gRPC ports (dual NUMA - port 8085 for NUMA node 0, port 8086 for NUMA node 1)
+        Write-Host "Created internal load balancer: $internalLbName"
+        $ilbJson = az network lb show --name $internalLbName --resource-group $resourceGroupName
+    } else {
+        Write-Host "Internal load balancer already exists: $internalLbName"
+    }
+    
+    $ilb = $ilbJson | ConvertFrom-Json
+    
+    # Ensure health probes exist (idempotent - check before create)
+    $existingProbes = @($ilb.probes | ForEach-Object { $_.name })
+    
+    # Port 8085: NUMA Node 0 process
+    if ($existingProbes -notcontains "grpcHealthProbe") {
+        Write-Host "Creating health probe: grpcHealthProbe (port 8085)"
         az network lb probe create `
             --name "grpcHealthProbe" `
             --lb-name $internalLbName `
@@ -251,7 +264,13 @@ if ($UseInternalLoadBalancer) {
             --interval 5 `
             --threshold 2 `
             --output none
-        
+    } else {
+        Write-Host "Health probe already exists: grpcHealthProbe"
+    }
+    
+    # Port 8086: NUMA Node 1 process
+    if ($existingProbes -notcontains "grpcHealthProbe8086") {
+        Write-Host "Creating health probe: grpcHealthProbe8086 (port 8086)"
         az network lb probe create `
             --name "grpcHealthProbe8086" `
             --lb-name $internalLbName `
@@ -261,8 +280,14 @@ if ($UseInternalLoadBalancer) {
             --interval 5 `
             --threshold 2 `
             --output none
-        
-        # Create inbound NAT pool for RDP (required by SF for BYOLB)
+    } else {
+        Write-Host "Health probe already exists: grpcHealthProbe8086"
+    }
+    
+    # Create inbound NAT pool for RDP if not exists (required by SF for BYOLB)
+    $existingNatPools = @($ilb.inboundNatPools | ForEach-Object { $_.name })
+    if ($existingNatPools -notcontains "rdpNatPool") {
+        Write-Host "Creating NAT pool: rdpNatPool"
         az network lb inbound-nat-pool create `
             --name "rdpNatPool" `
             --lb-name $internalLbName `
@@ -273,8 +298,16 @@ if ($UseInternalLoadBalancer) {
             --frontend-port-range-end 50119 `
             --backend-port 3389 `
             --output none
-        
-        # Create load balancing rules for gRPC (dual NUMA processes on ports 8085 and 8086)
+    } else {
+        Write-Host "NAT pool already exists: rdpNatPool"
+    }
+    
+    # Ensure LB rules exist (idempotent - check before create)
+    $existingRules = @($ilb.loadBalancingRules | ForEach-Object { $_.name })
+    
+    # Port 8085: NUMA Node 0 process
+    if ($existingRules -notcontains "grpcLbRule") {
+        Write-Host "Creating LB rule: grpcLbRule (port 8085)"
         az network lb rule create `
             --name "grpcLbRule" `
             --lb-name $internalLbName `
@@ -288,7 +321,13 @@ if ($UseInternalLoadBalancer) {
             --idle-timeout 30 `
             --enable-tcp-reset true `
             --output none
-        
+    } else {
+        Write-Host "LB rule already exists: grpcLbRule"
+    }
+    
+    # Port 8086: NUMA Node 1 process
+    if ($existingRules -notcontains "grpcLbRule8086") {
+        Write-Host "Creating LB rule: grpcLbRule8086 (port 8086)"
         az network lb rule create `
             --name "grpcLbRule8086" `
             --lb-name $internalLbName `
@@ -302,14 +341,14 @@ if ($UseInternalLoadBalancer) {
             --idle-timeout 30 `
             --enable-tcp-reset true `
             --output none
-        
-        Write-Host "Created internal load balancer with gRPC rules on ports 8085 and 8086 (dual NUMA)"
-        
-        $ilbJson = az network lb show --name $internalLbName --resource-group $resourceGroupName
     } else {
-        Write-Host "Internal load balancer already exists: $internalLbName"
+        Write-Host "LB rule already exists: grpcLbRule8086"
     }
     
+    Write-Host "Internal load balancer configured with dual-port NUMA deployment (8085 for NUMA 0, 8086 for NUMA 1)"
+    
+    # Refresh LB info after updates
+    $ilbJson = az network lb show --name $internalLbName --resource-group $resourceGroupName
     $ilb = $ilbJson | ConvertFrom-Json
     $internalLbId = $ilb.id
     $internalLbPrivateIp = $ilb.frontendIPConfigurations[0].privateIPAddress
@@ -496,7 +535,7 @@ if ($UseInternalLoadBalancer) {
                 isPrimary = $false
                 vmSize = $AppVmSize
                 vmInstanceCount = $AppVmCount
-                dataDiskSizeGB = 128
+                dataDiskSizeGB = 256
                 dataDiskType = "StandardSSD_LRS"
                 dataDiskLetter = "S"
                 # VM Image - Windows Server 2022
@@ -504,11 +543,31 @@ if ($UseInternalLoadBalancer) {
                 vmImageOffer = "WindowsServer"
                 vmImageSku = "2022-Datacenter"
                 vmImageVersion = "latest"
-                # BYOLB configuration
+                # Enable accelerated networking for high throughput
+                enableAcceleratedNetworking = $true
+                # BYOLB configuration - primary NIC joins LB backend pool
                 frontendConfigurations = @(
                     @{
                         loadBalancerBackendAddressPoolId = $backendPoolId
                         loadBalancerInboundNatPoolId = $natPoolId
+                    }
+                )
+                # Secondary NIC for NUMA node 1 - also joins the same LB backend pool
+                # This enables dual NUMA processes on same port (8085) via different NICs
+                additionalNetworkInterfaceConfigurations = @(
+                    @{
+                        name = "nic-numa1"
+                        enableAcceleratedNetworking = $true
+                        ipConfigurations = @(
+                            @{
+                                name = "ipconfig-numa1"
+                                loadBalancerBackendAddressPools = @(
+                                    @{ id = $backendPoolId }
+                                )
+                                subnet = @{ id = $userVnetSubnetId }
+                                privateIPAddressVersion = "IPv4"
+                            }
+                        )
                     }
                 )
                 # Use default public LB for outbound connectivity (required for Azure dependencies)
@@ -588,9 +647,10 @@ Write-Host "Service Fabric infrastructure RG: $sfInfraRg"
 
 # Add NSG rules for gRPC ports (only for non-BYOLB mode, BYOLB gets its own NSG)
 if (-not $UseInternalLoadBalancer) {
-    Write-Step "Configuring NSG for gRPC ports"
+    Write-Step "Configuring NSG for gRPC ports (dual-port NUMA deployment)"
     $nsgList = az network nsg list --resource-group $sfInfraRg --query "[0].name" -o tsv 2>$null
     if ($nsgList) {
+        # Port 8085: NUMA Node 0
         az network nsg rule create `
             --nsg-name $nsgList `
             --resource-group $sfInfraRg `
@@ -601,6 +661,9 @@ if (-not $UseInternalLoadBalancer) {
             --protocol Tcp `
             --destination-port-ranges 8085 `
             --output none 2>$null
+        Write-Host "Added NSG rule for port 8085 (NUMA Node 0)"
+        
+        # Port 8086: NUMA Node 1
         az network nsg rule create `
             --nsg-name $nsgList `
             --resource-group $sfInfraRg `
@@ -611,7 +674,7 @@ if (-not $UseInternalLoadBalancer) {
             --protocol Tcp `
             --destination-port-ranges 8086 `
             --output none 2>$null
-        Write-Host "Added NSG rules for ports 8085 and 8086 (dual NUMA)"
+        Write-Host "Added NSG rule for port 8086 (NUMA Node 1)"
     }
 }
 
@@ -639,11 +702,12 @@ foreach ($vmss in $vmssList) {
 
 # For BYOLB, also configure NSG on the app node type's NSG
 if ($UseInternalLoadBalancer -and $nodeIps.Count -gt 0) {
-    Write-Step "Configuring NSG for App Node Type (dual NUMA ports)"
+    Write-Step "Configuring NSG for App Node Type (dual-port NUMA deployment)"
     # BYOLB creates a separate NSG for each node type
     $appNsgList = az network nsg list --resource-group $sfInfraRg --query "[?contains(name, '$AppNodeTypeName') || contains(name, 'App')].name" -o tsv 2>$null
     if ($appNsgList) {
         foreach ($nsgName in $appNsgList) {
+            # Port 8085: NUMA Node 0
             az network nsg rule create `
                 --nsg-name $nsgName `
                 --resource-group $sfInfraRg `
@@ -654,6 +718,9 @@ if ($UseInternalLoadBalancer -and $nodeIps.Count -gt 0) {
                 --protocol Tcp `
                 --destination-port-ranges 8085 `
                 --output none 2>$null
+            Write-Host "Added NSG rule for port 8085 to NSG: $nsgName (NUMA Node 0)"
+            
+            # Port 8086: NUMA Node 1
             az network nsg rule create `
                 --nsg-name $nsgName `
                 --resource-group $sfInfraRg `
@@ -664,7 +731,7 @@ if ($UseInternalLoadBalancer -and $nodeIps.Count -gt 0) {
                 --protocol Tcp `
                 --destination-port-ranges 8086 `
                 --output none 2>$null
-            Write-Host "Added NSG rules for ports 8085 and 8086 to NSG: $nsgName (dual NUMA)"
+            Write-Host "Added NSG rule for port 8086 to NSG: $nsgName (NUMA Node 1)"
         }
     }
 }
@@ -705,7 +772,10 @@ $clusterConfig = @{
         uamiClientId = $regionConfig.identity.uamiClientId
     }
     dataplane = @{
-        grpcPort = 8085
+        # Dual-port NUMA deployment: Port 8085 for NUMA 0, Port 8086 for NUMA 1
+        grpcPortNuma0 = 8085
+        grpcPortNuma1 = 8086
+        grpcPorts = @(8085, 8086)
         configStorageAccount = $regionConfig.dataplane.configStorageAccount
         configContainer = $regionConfig.dataplane.configContainer
     }
@@ -719,6 +789,9 @@ if ($UseInternalLoadBalancer) {
         internalLoadBalancerName = $internalLbName
         privateIp = $internalLbPrivateIp
         backendPoolId = "$internalLbId/backendAddressPools/appBackendPool"
+        # Dual-port NUMA endpoints
+        grpcEndpointNuma0 = "$internalLbPrivateIp`:8085"
+        grpcEndpointNuma1 = "$internalLbPrivateIp`:8086"
     }
 }
 
@@ -733,10 +806,15 @@ $regionConfig.clusters += @{
 $regionConfig | ConvertTo-Json -Depth 10 | Out-File -FilePath $regionConfigFile -Encoding utf8
 
 # Summary
-$grpcEndpoint = if ($UseInternalLoadBalancer -and $internalLbPrivateIp) { 
+$grpcEndpointNuma0 = if ($UseInternalLoadBalancer -and $internalLbPrivateIp) { 
     "$internalLbPrivateIp`:8085" 
 } else { 
     "$($nodeIps[0]):8085" 
+}
+$grpcEndpointNuma1 = if ($UseInternalLoadBalancer -and $internalLbPrivateIp) { 
+    "$internalLbPrivateIp`:8086" 
+} else { 
+    "$($nodeIps[0]):8086" 
 }
 
 Write-Host @"
@@ -755,7 +833,8 @@ $(if ($UseInternalLoadBalancer) { @"
   BYOLB Configuration:
   - Internal LB:     $internalLbName
   - Private IP:      $internalLbPrivateIp
-  - gRPC Endpoint:   $grpcEndpoint
+  - gRPC Endpoint (NUMA 0): $grpcEndpointNuma0
+  - gRPC Endpoint (NUMA 1): $grpcEndpointNuma1
 "@})
   Config File:       $clusterConfigFile
 ================================================================================
@@ -764,9 +843,14 @@ Next Steps:
   1. Run DeployApp.ps1 -ClusterName "$ClusterName" -RegionName "$RegionName" to deploy the app
 $(if ($UseInternalLoadBalancer) { @"
   2. Ensure client VM is in the same VNet or has VNet peering to access private IP
-  3. Test with: .\run_azure_linux_cluster.ps1 -GrpcServerPrivate "$grpcEndpoint"
+  3. Test both NUMA endpoints:
+     - NUMA 0: .\run_azure_linux_cluster.ps1 -GrpcServerPrivate "$grpcEndpointNuma0"
+     - NUMA 1: .\run_azure_linux_cluster.ps1 -GrpcServerPrivate "$grpcEndpointNuma1"
+     - Both:   .\run_azure_linux_both.ps1 -GrpcServerPrivate "$($internalLbPrivateIp)"
 "@} else { @"
-  2. Test with: .\run_azure_linux_cluster.ps1 -GrpcServerPrivate "$grpcEndpoint"
+  2. Test both NUMA endpoints:
+     - NUMA 0: .\run_azure_linux_cluster.ps1 -GrpcServerPrivate "$grpcEndpointNuma0"
+     - NUMA 1: .\run_azure_linux_cluster.ps1 -GrpcServerPrivate "$grpcEndpointNuma1"
 "@})
 
 "@ -ForegroundColor Green

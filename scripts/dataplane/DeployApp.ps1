@@ -67,7 +67,9 @@ $pkgDir = Join-Path $repoRoot "KVService/sf/pkg/KVStoreServerApp"
 $buildDir = Join-Path $repoRoot "KVService/build/Release"
 $deployScript = Join-Path $pkgDir "deploy.ps1"
 $appManifest = Join-Path $pkgDir "ApplicationManifest.xml"
-$svcManifest = Join-Path $pkgDir "KVStoreServerServicePkg/ServiceManifest.xml"
+# Dual NUMA package structure - Node0 and Node1
+$svcManifestNode0 = Join-Path $pkgDir "KVStoreServerNode0Pkg/ServiceManifest.xml"
+$svcManifestNode1 = Join-Path $pkgDir "KVStoreServerNode1Pkg/ServiceManifest.xml"
 
 # ============================================================================
 # Helper Functions
@@ -84,7 +86,7 @@ function Get-ManifestVersion {
 }
 
 function Set-ManifestVersion {
-    param([string]$AppManifestPath, [string]$SvcManifestPath, [string]$Version)
+    param([string]$AppManifestPath, [string[]]$SvcManifestPaths, [string]$Version)
     
     # Update ApplicationManifest
     $content = Get-Content $AppManifestPath -Raw
@@ -92,11 +94,16 @@ function Set-ManifestVersion {
     $content = $content -replace 'ServiceManifestVersion="[^"]*"', "ServiceManifestVersion=`"$Version`""
     $content | Set-Content $AppManifestPath -Encoding UTF8
     
-    # Update ServiceManifest
-    $content = Get-Content $SvcManifestPath -Raw
-    $content = $content -replace '(<ServiceManifest[^>]*Version=")[^"]*"', "`${1}$Version`""
-    $content = $content -replace '(<CodePackage[^>]*Version=")[^"]*"', "`${1}$Version`""
-    $content | Set-Content $SvcManifestPath -Encoding UTF8
+    # Update each ServiceManifest (Node0 and Node1)
+    foreach ($svcManifestPath in $SvcManifestPaths) {
+        if (Test-Path $svcManifestPath) {
+            $content = Get-Content $svcManifestPath -Raw
+            $content = $content -replace '(<ServiceManifest[^>]*Version=")[^"]*"', "`${1}$Version`""
+            $content = $content -replace '(<CodePackage[^>]*Version=")[^"]*"', "`${1}$Version`""
+            $content | Set-Content $svcManifestPath -Encoding UTF8
+            Write-Host "  Updated: $svcManifestPath"
+        }
+    }
 }
 
 function Increment-Version {
@@ -131,28 +138,44 @@ if ([string]::IsNullOrEmpty($AppVersion)) {
 
 # Update manifests with new version
 Write-Step "Updating Manifest Versions"
-Set-ManifestVersion -AppManifestPath $appManifest -SvcManifestPath $svcManifest -Version $AppVersion
+Set-ManifestVersion -AppManifestPath $appManifest -SvcManifestPaths @($svcManifestNode0, $svcManifestNode1) -Version $AppVersion
 Write-Host "Updated manifests to version: $AppVersion"
 
-# Copy latest binary
+# Copy latest binary to both Node0 and Node1 Code folders
 Write-Step "Copying Latest Binary"
 $exePath = Join-Path $buildDir "KVStoreServer.exe"
-$targetPath = Join-Path $pkgDir "KVStoreServerServicePkg/Code/KVStoreServer.exe"
+$targetPathNode0 = Join-Path $pkgDir "KVStoreServerNode0Pkg/Code/KVStoreServer.exe"
+$targetPathNode1 = Join-Path $pkgDir "KVStoreServerNode1Pkg/Code/KVStoreServer.exe"
 
 if (Test-Path $exePath) {
-    Copy-Item $exePath $targetPath -Force
-    Write-Host "Copied KVStoreServer.exe from: $exePath"
+    Copy-Item $exePath $targetPathNode0 -Force
+    Copy-Item $exePath $targetPathNode1 -Force
+    Write-Host "Copied KVStoreServer.exe to Node0 and Node1 Code folders"
 } else {
-    Write-Warning "Binary not found at $exePath. Using existing binary."
+    Write-Warning "Binary not found at $exePath. Using existing binaries."
 }
 
 # Build app parameters
 Write-Step "Configuring Application Parameters"
+
+# Support both old single-port and new dual-port config formats
+$grpcPortNuma0 = if ($clusterConfig.dataplane.grpcPortNuma0) { 
+    $clusterConfig.dataplane.grpcPortNuma0.ToString() 
+} else { 
+    "8085" 
+}
+$grpcPortNuma1 = if ($clusterConfig.dataplane.grpcPortNuma1) { 
+    $clusterConfig.dataplane.grpcPortNuma1.ToString() 
+} else { 
+    "8086" 
+}
+
 $appParams = @{
     CurrentLocation = $RegionName
     ConfigurationStore = $clusterConfig.dataplane.configStorageAccount
     ConfigurationContainer = $clusterConfig.dataplane.configContainer
-    GrpcPort = $clusterConfig.dataplane.grpcPort.ToString()
+    GrpcPortNuma0 = $grpcPortNuma0
+    GrpcPortNuma1 = $grpcPortNuma1
     ManagedIdentityClientId = $clusterConfig.identity.uamiClientId
 }
 
@@ -175,10 +198,15 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Summary
-$grpcEndpoint = if ($clusterConfig.byolb -and $clusterConfig.byolb.enabled -and $clusterConfig.byolb.privateIp) {
-    "$($clusterConfig.byolb.privateIp):$($clusterConfig.dataplane.grpcPort)"
+$grpcEndpointNuma0 = if ($clusterConfig.byolb -and $clusterConfig.byolb.enabled -and $clusterConfig.byolb.privateIp) {
+    "$($clusterConfig.byolb.privateIp):$grpcPortNuma0"
 } else {
-    "$($clusterConfig.nodeType.nodeIps[0]):$($clusterConfig.dataplane.grpcPort)"
+    "$($clusterConfig.nodeType.nodeIps[0]):$grpcPortNuma0"
+}
+$grpcEndpointNuma1 = if ($clusterConfig.byolb -and $clusterConfig.byolb.enabled -and $clusterConfig.byolb.privateIp) {
+    "$($clusterConfig.byolb.privateIp):$grpcPortNuma1"
+} else {
+    "$($clusterConfig.nodeType.nodeIps[0]):$grpcPortNuma1"
 }
 
 $appNodeType = if ($clusterConfig.nodeType.appName) { $clusterConfig.nodeType.appName } else { $clusterConfig.nodeType.primaryName }
@@ -191,8 +219,10 @@ Write-Host @"
   Cluster:          $ClusterName
   App Version:      $AppVersion
   App Node Type:    $appNodeType
-  gRPC Port:        $($clusterConfig.dataplane.grpcPort)
-  gRPC Endpoint:    $grpcEndpoint
+  
+  Dual-Port NUMA Configuration:
+  - Port $grpcPortNuma0 (NUMA Node 0): $grpcEndpointNuma0
+  - Port $grpcPortNuma1 (NUMA Node 1): $grpcEndpointNuma1
 $(if ($clusterConfig.byolb -and $clusterConfig.byolb.enabled) { @"
   
   BYOLB Configuration:
@@ -202,7 +232,14 @@ $(if ($clusterConfig.byolb -and $clusterConfig.byolb.enabled) { @"
   Node IPs:         $($clusterConfig.nodeType.nodeIps -join ', ')
 ================================================================================
 
-Test the deployment:
-  .\scripts\run\run_azure_linux_cluster.ps1 -GrpcServerPrivate "$grpcEndpoint" -Iterations 10 -Concurrency 1
+Test the deployment (dual-port NUMA):
+  # Test NUMA Node 0 (port $grpcPortNuma0):
+  .\scripts\run\run_azure_linux_cluster.ps1 -GrpcServerPrivate "$grpcEndpointNuma0" -Iterations 10 -Concurrency 1
+  
+  # Test NUMA Node 1 (port $grpcPortNuma1):
+  .\scripts\run\run_azure_linux_cluster.ps1 -GrpcServerPrivate "$grpcEndpointNuma1" -Iterations 10 -Concurrency 1
+  
+  # Test both NUMA nodes:
+  .\scripts\run\run_azure_linux_both.ps1 -GrpcServerPrivate "$($clusterConfig.byolb.privateIp)"
 
 "@ -ForegroundColor Green
