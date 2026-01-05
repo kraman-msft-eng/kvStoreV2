@@ -602,6 +602,52 @@ if ($UseInternalLoadBalancer) {
         Write-Host "  App node type provisioning state: $state ($waited min)"
     } while (($state -eq "Updating" -or $state -eq "Creating") -and $waited -lt $maxWait)
     
+    # IMPORTANT: SF Managed Cluster's frontendConfigurations doesn't automatically add VMs to the internal LB backend pool
+    # We need to manually update the VMSS to add our internal LB backend pool
+    Write-Step "Adding App VMSS to Internal LB Backend Pool"
+    
+    # Find the App VMSS in the SF infrastructure resource group
+    $appVmssName = az vmss list --resource-group $sfInfraRg --query "[?contains(name, '$AppNodeTypeName') || name=='$AppNodeTypeName'].name" -o tsv 2>$null | Select-Object -First 1
+    if (-not $appVmssName) {
+        # Try exact match
+        $appVmssName = $AppNodeTypeName
+    }
+    
+    if ($appVmssName) {
+        Write-Host "Found App VMSS: $appVmssName"
+        
+        # Get current backend pools from VMSS
+        $currentPools = az vmss show --name $appVmssName --resource-group $sfInfraRg --query "virtualMachineProfile.networkProfile.networkInterfaceConfigurations[0].ipConfigurations[0].loadBalancerBackendAddressPools[].id" -o tsv 2>$null
+        
+        # Check if our internal LB backend pool is already added
+        if ($currentPools -notcontains $backendPoolId) {
+            Write-Host "Adding internal LB backend pool to VMSS..."
+            
+            # Build the list of backend pools (existing + our internal LB)
+            $poolList = @()
+            foreach ($pool in $currentPools) {
+                if ($pool -and $pool -ne "") {
+                    $poolList += @{id=$pool}
+                }
+            }
+            $poolList += @{id=$backendPoolId}
+            
+            # Convert to JSON for az vmss update
+            $poolsJson = ($poolList | ConvertTo-Json -Compress) -replace '"', '\"'
+            
+            # Update VMSS to add our backend pool
+            az vmss update --name $appVmssName --resource-group $sfInfraRg --set "virtualMachineProfile.networkProfile.networkInterfaceConfigurations[0].ipConfigurations[0].loadBalancerBackendAddressPools=$poolsJson" --output none 2>$null
+            
+            # The VMSS has automatic upgrades, so the change will be applied automatically
+            Write-Host "Internal LB backend pool added to VMSS"
+            Write-Host "  Backend Pool: $backendPoolId"
+        } else {
+            Write-Host "VMSS already has internal LB backend pool configured"
+        }
+    } else {
+        Write-Warning "Could not find App VMSS to configure backend pool"
+    }
+    
     # UAMI is already assigned during node type creation for BYOLB
     Write-Host "UAMI assigned during app node type creation"
     
