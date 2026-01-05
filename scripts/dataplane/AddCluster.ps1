@@ -688,12 +688,13 @@ foreach ($vmss in $vmssList) {
     # Check if this VMSS matches our target node type
     $vmssName = $vmss.name
     if ($vmssName -like "*$targetNodeTypeName*" -or (-not $UseInternalLoadBalancer -and $vmssList.Count -eq 1)) {
-        $instances = az vmss list-instances --resource-group $sfInfraRg --name $vmssName --query "[].instanceId" -o tsv
-        foreach ($instanceId in $instances) {
-            $nicId = az vmss nic list --resource-group $sfInfraRg --vmss-name $vmssName --instance-id $instanceId --query "[0].id" -o tsv
-            if ($nicId) {
-                $ip = az network nic show --ids $nicId --query "ipConfigurations[0].privateIPAddress" -o tsv
-                $nodeIps += $ip
+        # Get all NICs in the VMSS and extract private IPs
+        $nics = az vmss nic list --resource-group $sfInfraRg --vmss-name $vmssName --query "[].ipConfigurations[0].privateIPAddress" -o tsv 2>$null
+        if ($nics) {
+            foreach ($ip in $nics) {
+                if ($ip -and $ip -ne "") {
+                    $nodeIps += $ip
+                }
             }
         }
         break

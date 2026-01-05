@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ApplicationManifest ApplicationTypeName="KVStoreServerAppType" ApplicationTypeVersion="1.0.21" xmlns="http://schemas.microsoft.com/2011/01/fabric" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ApplicationManifest ApplicationTypeName="KVStoreServerAppType" ApplicationTypeVersion="1.0.28" xmlns="http://schemas.microsoft.com/2011/01/fabric" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Description>KVStore Server Application with dual-port NUMA deployment (Port 8085 NUMA0, Port 8086 NUMA1)</Description>
   
   <Parameters>
@@ -16,7 +16,7 @@
   
   <!-- Service for NUMA Node 0 (Port 8085) -->
   <ServiceManifestImport>
-    <ServiceManifestRef ServiceManifestName="KVStoreServerNode0Pkg" ServiceManifestVersion="1.0.21" />
+    <ServiceManifestRef ServiceManifestName="KVStoreServerNode0Pkg" ServiceManifestVersion="1.0.28" />
     <EnvironmentOverrides CodePackageRef="Code">
       <EnvironmentVariable Name="AZURE_STORAGE_BLOB_DNS_SUFFIX" Value="[AZURE_STORAGE_BLOB_DNS_SUFFIX]" />
       <EnvironmentVariable Name="KVSTORE_LOG_LEVEL" Value="[KVSTORE_LOG_LEVEL]" />
@@ -35,7 +35,7 @@
   
   <!-- Service for NUMA Node 1 (Port 8086) -->
   <ServiceManifestImport>
-    <ServiceManifestRef ServiceManifestName="KVStoreServerNode1Pkg" ServiceManifestVersion="1.0.21" />
+    <ServiceManifestRef ServiceManifestName="KVStoreServerNode1Pkg" ServiceManifestVersion="1.0.28" />
     <EnvironmentOverrides CodePackageRef="Code">
       <EnvironmentVariable Name="AZURE_STORAGE_BLOB_DNS_SUFFIX" Value="[AZURE_STORAGE_BLOB_DNS_SUFFIX]" />
       <EnvironmentVariable Name="KVSTORE_LOG_LEVEL" Value="[KVSTORE_LOG_LEVEL]" />
@@ -46,7 +46,6 @@
       <EnvironmentVariable Name="KV_CONFIGURATION_STORE" Value="[ConfigurationStore]" />
       <EnvironmentVariable Name="KV_CONFIGURATION_CONTAINER" Value="[ConfigurationContainer]" />
       <EnvironmentVariable Name="AZURE_CLIENT_ID" Value="[ManagedIdentityClientId]" />
-    </EnvironmentOverrides>
     </EnvironmentOverrides>
     <Policies>
       <RunAsPolicy CodePackageRef="Code" UserRef="LocalAdmin" EntryPointType="All" />
@@ -77,6 +76,13 @@
     </Users>
   </Principals>
 </ApplicationManifest>
+
+
+
+
+
+
+
 
 
 

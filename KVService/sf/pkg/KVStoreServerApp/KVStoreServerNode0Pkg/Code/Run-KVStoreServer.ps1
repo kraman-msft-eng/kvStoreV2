@@ -60,15 +60,16 @@ Write-Host " Log Level: $logLevel"
 Write-Host " Exe Path:  $exePath"
 Write-Host "=========================================="
 
-# Build command arguments (no --processor-group, we use start /NODE instead)
+# Build command arguments
 $exeArgs = "--port $port --host $bindIp --log-level $logLevel --disable-metrics"
 
-Write-Host "Starting with NUMA affinity: start /NODE $numaNode /B /WAIT $exePath $exeArgs"
+# Use Windows start command with /NODE for NUMA affinity
+# Important: First quoted string after 'start' is the window title, so we pass "" as empty title
+$startCmd = "start /NODE $numaNode /B /WAIT `"`" `"$exePath`" $exeArgs"
+Write-Host "Starting with NUMA affinity: $startCmd"
 
-# Use Windows start command with /NODE for NUMA affinity (no special privileges needed)
-# /B = no new window, /WAIT = wait for process to exit
-$startArgs = "/NODE $numaNode /B /WAIT `"$exePath`" $exeArgs"
-Start-Process -FilePath "cmd.exe" -ArgumentList "/c start $startArgs" -NoNewWindow -Wait
+cmd /c $startCmd
 
 # If we get here, the process exited
-Write-Host "KVStoreServer exited at $(Get-Date)"
+$exitCode = $LASTEXITCODE
+Write-Host "KVStoreServer exited at $(Get-Date) with code $exitCode"
