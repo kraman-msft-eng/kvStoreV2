@@ -18,7 +18,22 @@ if ($LASTEXITCODE -eq 0) {
 }
 Write-Host ""
 
+# Deploy benchmark sweep script
+Write-Host "Copying benchmark_sweep.sh script..." -ForegroundColor Yellow
+scp -i $sshKey C:\Users\kraman\source\KVStoreV2\scripts\analysis\benchmark_sweep.sh azureuser@${linuxVM}:~/kvgrpc/
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "  ✓ Benchmark script deployed successfully" -ForegroundColor Green
+    # Fix line endings and make executable
+    ssh -i $sshKey azureuser@${linuxVM} "cd ~/kvgrpc && sed -i 's/\r$//' benchmark_sweep.sh && chmod +x benchmark_sweep.sh"
+    Write-Host "  ✓ Line endings fixed and script made executable" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ Benchmark script deployment failed" -ForegroundColor Red
+}
+Write-Host ""
+
 Write-Host "===== Deployment Complete =====" -ForegroundColor Green
 Write-Host "Location: azureuser@${linuxVM}:~/kvgrpc/KVPlayground" -ForegroundColor Gray
+Write-Host "Benchmark: azureuser@${linuxVM}:~/kvgrpc/benchmark_sweep.sh" -ForegroundColor Gray
 Write-Host ""
 Write-Host "To test with E2E latency metrics, run: .\run_azure_linux.ps1" -ForegroundColor Cyan
+Write-Host "To run benchmark sweep, run: .\run\benchmark_run.ps1" -ForegroundColor Cyan
