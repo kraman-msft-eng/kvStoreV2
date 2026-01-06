@@ -370,12 +370,20 @@ Contains cluster-specific settings:
 | `scripts/dataplane/AddClientVNetToRegion.ps1` | Create peering from KVStore → Customer VNet | KVStore Team |
 | `scripts/dataplane/PeerToPromptService.ps1` | Create peering from Customer → KVStore VNet | Customer |
 
-### Testing
+### Testing & Benchmarking
 
 | Script | Purpose |
 |--------|---------|
 | `scripts/run/run_azure_linux_cluster.ps1` | Test from Linux VM via internal LB |
-| `scripts/run/run_azure_linux.ps1` | Test from Linux VM |
+| `scripts/run/benchmark_run.ps1` | One-click benchmark sweep with chart generation |
+| `scripts/deploy/deploy_client.ps1` | Deploy KVPlayground client + benchmark scripts to Linux VM |
+
+### Benchmark Analysis
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/analysis/benchmark_sweep.sh` | Multi-process benchmark sweep (runs on Linux VM) |
+| `scripts/analysis/generate_charts.py` | Generate interactive HTML charts from results |
 
 ## Adding a New Cluster
 
@@ -438,6 +446,112 @@ To add a new region:
 | **Transport** | gRPC over TLS |
 | **Identity** | UAMI for Azure resource access |
 | **Data** | Azure Storage encryption at rest |
+
+## Client Testing Infrastructure
+
+For benchmarking and testing, we use a **Linux VM** in a peered VNet that accesses the KVStore service via the internal load balancer.
+
+### Linux Client VM
+
+| Property | Value |
+|----------|-------|
+| **Public IP** | `20.115.133.84` |
+| **Private IP** | `10.1.1.4` |
+| **VNet** | Peered to `kvstore-vnet-westus2` |
+| **SSH Key** | `kvClient.pem` |
+| **Working Dir** | `~/kvgrpc/` |
+
+### Client Components
+
+```
+~/kvgrpc/
+├── KVPlayground          # Benchmark executable
+├── conversation_tokens.json  # Test data (token blocks)
+├── benchmark_sweep.sh    # Multi-process benchmark script
+└── generate_charts.py    # Chart generator
+```
+
+### Running Benchmarks
+
+**Option 1: One-click from Windows (recommended)**
+```powershell
+# Run benchmark sweep and generate charts
+.\scripts\run\benchmark_run.ps1
+
+# Just regenerate charts from existing data
+.\scripts\run\benchmark_run.ps1 -SkipBenchmark -OpenChart
+```
+
+**Option 2: Manual SSH**
+```bash
+# SSH to Linux VM
+ssh -i C:\Users\kraman\Downloads\kvClient.pem azureuser@20.115.133.84
+
+# Run benchmark
+cd ~/kvgrpc
+./benchmark_sweep.sh
+```
+
+### Benchmark Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     Benchmark Sweep (benchmark_sweep.sh)                │
+│                                                                         │
+│  ┌─────────────┐  ┌─────────────┐       ┌─────────────┐                │
+│  │ Process 1   │  │ Process 2   │  ...  │ Process 8   │                │
+│  │ NUMA0:8085  │  │ NUMA1:8086  │       │ NUMA0:8085  │                │
+│  └──────┬──────┘  └──────┬──────┘       └──────┬──────┘                │
+│         │                │                     │                        │
+└─────────┼────────────────┼─────────────────────┼────────────────────────┘
+          │                │                     │
+          └────────────────┼─────────────────────┘
+                           │ VNet Peering
+                           ▼
+        ┌──────────────────────────────────────────┐
+        │        Internal Load Balancer            │
+        │           10.0.0.4                       │
+        │     Port 8085 (NUMA0) / 8086 (NUMA1)     │
+        └──────────────────┬───────────────────────┘
+                           │
+        ┌──────────────────┼──────────────────────┐
+        │                  │                      │
+        ▼                  ▼                      ▼
+┌──────────────┐   ┌──────────────┐       ┌──────────────┐
+│   App VM 0   │   │   App VM 1   │  ...  │   App VM N   │
+│              │   │              │       │              │
+│ ┌──────────┐ │   │ ┌──────────┐ │       │ ┌──────────┐ │
+│ │:8085     │ │   │ │:8085     │ │       │ │:8085     │ │
+│ │(NUMA0)   │ │   │ │(NUMA0)   │ │       │ │(NUMA0)   │ │
+│ ├──────────┤ │   │ ├──────────┤ │       │ ├──────────┤ │
+│ │:8086     │ │   │ │:8086     │ │       │ │:8086     │ │
+│ │(NUMA1)   │ │   │ │(NUMA1)   │ │       │ │(NUMA1)   │ │
+│ └──────────┘ │   │ └──────────┘ │       │ └──────────┘ │
+└──────────────┘   └──────────────┘       └──────────────┘
+```
+
+### Deploying Client Updates
+
+```powershell
+# Deploy KVPlayground binary + benchmark scripts to Linux VM
+.\scripts\deploy\deploy_client.ps1
+```
+
+This copies:
+- `KVPlayground` binary (built from `build/KVPlayground/`)
+- `benchmark_sweep.sh` (from `scripts/analysis/`)
+- `generate_charts.py` (from `scripts/analysis/`)
+
+### Performance Results
+
+See **[PERFORMANCE_SUMMARY.md](./PERFORMANCE_SUMMARY.md)** and **[benchmark_charts.html](./benchmark_charts.html)** for detailed benchmark results.
+
+**Summary:**
+- **Peak throughput:** ~94K tokens/sec (reads + writes)
+- **Peak TPS:** ~82 iterations/sec
+- **Sweet spot:** C=32 (8 processes × 4 concurrency each)
+- **Lookup latency:** p50=4.7ms (metadata only)
+- **Read latency:** p50=26ms at C=32 (Azure Storage bound)
 
 ## Troubleshooting
 
