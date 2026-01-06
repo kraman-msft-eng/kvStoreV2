@@ -543,7 +543,7 @@ if ($UseInternalLoadBalancer) {
                 vmImageOffer = "WindowsServer"
                 vmImageSku = "2022-Datacenter"
                 vmImageVersion = "latest"
-                # Enable accelerated networking for high throughput
+                # Enable accelerated networking for high throughput on primary NIC
                 enableAcceleratedNetworking = $true
                 # BYOLB configuration - primary NIC joins LB backend pool
                 frontendConfigurations = @(
@@ -552,19 +552,76 @@ if ($UseInternalLoadBalancer) {
                         loadBalancerInboundNatPoolId = $natPoolId
                     }
                 )
-                # Secondary NIC for NUMA node 1 - also joins the same LB backend pool
-                # This enables dual NUMA processes on same port (8085) via different NICs
+                # Additional NICs (7 more for total of 8) - all with accelerated networking
+                # This enables multi-NIC outbound to Azure Storage for higher throughput
+                # The server code detects multiple NICs and distributes outbound connections across all
                 additionalNetworkInterfaceConfigurations = @(
                     @{
-                        name = "nic-numa1"
+                        name = "nic2"
                         enableAcceleratedNetworking = $true
                         ipConfigurations = @(
                             @{
-                                name = "ipconfig-numa1"
-                                loadBalancerBackendAddressPools = @(
-                                    @{ id = $backendPoolId }
-                                )
-                                subnet = @{ id = $userVnetSubnetId }
+                                name = "ipconfig2"
+                                privateIPAddressVersion = "IPv4"
+                            }
+                        )
+                    }
+                    @{
+                        name = "nic3"
+                        enableAcceleratedNetworking = $true
+                        ipConfigurations = @(
+                            @{
+                                name = "ipconfig3"
+                                privateIPAddressVersion = "IPv4"
+                            }
+                        )
+                    }
+                    @{
+                        name = "nic4"
+                        enableAcceleratedNetworking = $true
+                        ipConfigurations = @(
+                            @{
+                                name = "ipconfig4"
+                                privateIPAddressVersion = "IPv4"
+                            }
+                        )
+                    }
+                    @{
+                        name = "nic5"
+                        enableAcceleratedNetworking = $true
+                        ipConfigurations = @(
+                            @{
+                                name = "ipconfig5"
+                                privateIPAddressVersion = "IPv4"
+                            }
+                        )
+                    }
+                    @{
+                        name = "nic6"
+                        enableAcceleratedNetworking = $true
+                        ipConfigurations = @(
+                            @{
+                                name = "ipconfig6"
+                                privateIPAddressVersion = "IPv4"
+                            }
+                        )
+                    }
+                    @{
+                        name = "nic7"
+                        enableAcceleratedNetworking = $true
+                        ipConfigurations = @(
+                            @{
+                                name = "ipconfig7"
+                                privateIPAddressVersion = "IPv4"
+                            }
+                        )
+                    }
+                    @{
+                        name = "nic8"
+                        enableAcceleratedNetworking = $true
+                        ipConfigurations = @(
+                            @{
+                                name = "ipconfig8"
                                 privateIPAddressVersion = "IPv4"
                             }
                         )

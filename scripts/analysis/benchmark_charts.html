@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KVStore Benchmark - Lookup & Read Latency</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a2e; color: #eee; }
+        h1 { text-align: center; color: #00d4ff; }
+        h2 { color: #00d4ff; margin-top: 40px; }
+        .chart-container { width: 90%; max-width: 1000px; margin: 20px auto; background: #16213e; padding: 20px; border-radius: 10px; }
+        .chart-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+        .chart-box { flex: 1; min-width: 450px; max-width: 600px; }
+        table { margin: 20px auto; border-collapse: collapse; background: #16213e; }
+        th, td { padding: 8px 15px; border: 1px solid #444; text-align: right; }
+        th { background: #0f3460; color: #00d4ff; }
+        tr:nth-child(even) { background: #1a1a3e; }
+    </style>
+</head>
+<body>
+    <h1>KVStore Benchmark Results</h1>
+    <h2>Latency vs Token Throughput</h2>
+    
+    <div class="chart-container">
+        <h3 style="text-align:center; color:#ff6b6b;">Lookup Latency</h3>
+        <canvas id="lookupChart"></canvas>
+    </div>
+    
+    <div class="chart-container">
+        <h3 style="text-align:center; color:#4ecdc4;">Read Latency</h3>
+        <canvas id="readChart"></canvas>
+    </div>
+    
+    <div class="chart-container">
+        <h3 style="text-align:center; color:#ffe66d;">Throughput</h3>
+        <canvas id="throughputChart"></canvas>
+    </div>
+    
+    <h2>Raw Data</h2>
+    <table>
+        <tr>
+            <th>Concurrency</th>
+            <th>TPS</th>
+            <th>K Tokens/s</th>
+            <th>Lookup p50</th>
+            <th>Lookup p90</th>
+            <th>Lookup p99</th>
+            <th>Read p50</th>
+            <th>Read p90</th>
+            <th>Read p99</th>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>3.6</td>
+            <td>4.1</td>
+            <td>4.95ms</td>
+            <td>8.08ms</td>
+            <td>11.16ms</td>
+            <td>18.81ms</td>
+            <td>20.75ms</td>
+            <td>22.84ms</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>7.4</td>
+            <td>8.5</td>
+            <td>4.84ms</td>
+            <td>7.91ms</td>
+            <td>11.07ms</td>
+            <td>19.17ms</td>
+            <td>21.24ms</td>
+            <td>25.51ms</td>
+        </tr>
+        <tr>
+            <td>4</td>
+            <td>14.6</td>
+            <td>16.8</td>
+            <td>4.72ms</td>
+            <td>7.67ms</td>
+            <td>10.80ms</td>
+            <td>19.60ms</td>
+            <td>22.06ms</td>
+            <td>32.24ms</td>
+        </tr>
+        <tr>
+            <td>6</td>
+            <td>22.0</td>
+            <td>25.3</td>
+            <td>4.63ms</td>
+            <td>7.55ms</td>
+            <td>11.92ms</td>
+            <td>20.19ms</td>
+            <td>22.71ms</td>
+            <td>28.79ms</td>
+        </tr>
+        <tr>
+            <td>8</td>
+            <td>28.8</td>
+            <td>33.2</td>
+            <td>4.72ms</td>
+            <td>7.49ms</td>
+            <td>12.07ms</td>
+            <td>20.61ms</td>
+            <td>23.52ms</td>
+            <td>35.80ms</td>
+        </tr>
+        <tr>
+            <td>16</td>
+            <td>47.6</td>
+            <td>54.8</td>
+            <td>4.56ms</td>
+            <td>7.33ms</td>
+            <td>11.44ms</td>
+            <td>22.29ms</td>
+            <td>27.95ms</td>
+            <td>43.36ms</td>
+        </tr>
+        <tr>
+            <td>32</td>
+            <td>65.8</td>
+            <td>75.8</td>
+            <td>4.68ms</td>
+            <td>6.46ms</td>
+            <td>12.49ms</td>
+            <td>25.96ms</td>
+            <td>39.86ms</td>
+            <td>69.17ms</td>
+        </tr>
+        <tr>
+            <td>64</td>
+            <td>80.5</td>
+            <td>92.7</td>
+            <td>5.23ms</td>
+            <td>9.02ms</td>
+            <td>23.54ms</td>
+            <td>41.97ms</td>
+            <td>83.60ms</td>
+            <td>157.82ms</td>
+        </tr>
+        <tr>
+            <td>80</td>
+            <td>81.5</td>
+            <td>93.9</td>
+            <td>5.63ms</td>
+            <td>11.54ms</td>
+            <td>28.65ms</td>
+            <td>57.04ms</td>
+            <td>104.81ms</td>
+            <td>166.90ms</td>
+        </tr>
+    </table>
+    
+    <script>
+        const labels = ['1c', '2c', '4c', '6c', '8c', '16c', '32c', '64c', '80c'];
+        const tokensK = [4.112, 8.536, 16.842, 25.321, 33.178, 54.835, 75.848, 92.736, 93.946];
+        const tps = [3.57, 7.41, 14.62, 21.98, 28.8, 47.6, 65.84, 80.5, 81.55];
+        
+        // Lookup Chart
+        new Chart(document.getElementById('lookupChart'), {
+            type: 'line',
+            data: {
+                labels: tokensK.map(t => t.toFixed(1) + 'K'),
+                datasets: [
+                    {
+                        label: 'p50',
+                        data: [4.95, 4.84, 4.72, 4.63, 4.72, 4.56, 4.68, 5.23, 5.63],
+                        borderColor: '#ff6b6b',
+                        backgroundColor: 'rgba(255,107,107,0.1)',
+                        tension: 0.3,
+                        pointRadius: 6
+                    },
+                    {
+                        label: 'p90',
+                        data: [8.08, 7.91, 7.67, 7.55, 7.49, 7.33, 6.46, 9.02, 11.54],
+                        borderColor: '#ffa502',
+                        backgroundColor: 'rgba(255,165,2,0.1)',
+                        tension: 0.3,
+                        pointRadius: 6
+                    },
+                    {
+                        label: 'p99',
+                        data: [11.16, 11.07, 10.8, 11.92, 12.07, 11.44, 12.49, 23.54, 28.65],
+                        borderColor: '#ff4757',
+                        backgroundColor: 'rgba(255,71,87,0.1)',
+                        tension: 0.3,
+                        pointRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: { display: true, text: 'Lookup Latency vs Token Throughput', color: '#eee' },
+                    legend: { labels: { color: '#eee' } }
+                },
+                scales: {
+                    x: { 
+                        title: { display: true, text: 'Token Throughput (K tokens/sec)', color: '#eee' },
+                        ticks: { color: '#aaa' },
+                        grid: { color: '#333' }
+                    },
+                    y: { 
+                        title: { display: true, text: 'Latency (ms)', color: '#eee' },
+                        ticks: { color: '#aaa' },
+                        grid: { color: '#333' },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        
+        // Read Chart
+        new Chart(document.getElementById('readChart'), {
+            type: 'line',
+            data: {
+                labels: tokensK.map(t => t.toFixed(1) + 'K'),
+                datasets: [
+                    {
+                        label: 'p50',
+                        data: [18.81, 19.17, 19.6, 20.19, 20.61, 22.29, 25.96, 41.97, 57.04],
+                        borderColor: '#4ecdc4',
+                        backgroundColor: 'rgba(78,205,196,0.1)',
+                        tension: 0.3,
+                        pointRadius: 6
+                    },
+                    {
+                        label: 'p90',
+                        data: [20.75, 21.24, 22.06, 22.71, 23.52, 27.95, 39.86, 83.6, 104.81],
+                        borderColor: '#45b7d1',
+                        backgroundColor: 'rgba(69,183,209,0.1)',
+                        tension: 0.3,
+                        pointRadius: 6
+                    },
+                    {
+                        label: 'p99',
+                        data: [22.84, 25.51, 32.24, 28.79, 35.8, 43.36, 69.17, 157.82, 166.9],
+                        borderColor: '#96ceb4',
+                        backgroundColor: 'rgba(150,206,180,0.1)',
+                        tension: 0.3,
+                        pointRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: { display: true, text: 'Read Latency vs Token Throughput', color: '#eee' },
+                    legend: { labels: { color: '#eee' } }
+                },
+                scales: {
+                    x: { 
+                        title: { display: true, text: 'Token Throughput (K tokens/sec)', color: '#eee' },
+                        ticks: { color: '#aaa' },
+                        grid: { color: '#333' }
+                    },
+                    y: { 
+                        title: { display: true, text: 'Latency (ms)', color: '#eee' },
+                        ticks: { color: '#aaa' },
+                        grid: { color: '#333' },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        
+        // Throughput Chart  
+        new Chart(document.getElementById('throughputChart'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'TPS',
+                        data: tps,
+                        backgroundColor: 'rgba(255,230,109,0.7)',
+                        borderColor: '#ffe66d',
+                        borderWidth: 2,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'K Tokens/sec',
+                        data: tokensK,
+                        backgroundColor: 'rgba(0,212,255,0.7)',
+                        borderColor: '#00d4ff',
+                        borderWidth: 2,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: { display: true, text: 'Throughput by Concurrency', color: '#eee' },
+                    legend: { labels: { color: '#eee' } }
+                },
+                scales: {
+                    x: { 
+                        title: { display: true, text: 'Total Concurrency', color: '#eee' },
+                        ticks: { color: '#aaa' },
+                        grid: { color: '#333' }
+                    },
+                    y: { 
+                        type: 'linear',
+                        position: 'left',
+                        title: { display: true, text: 'TPS', color: '#ffe66d' },
+                        ticks: { color: '#ffe66d' },
+                        grid: { color: '#333' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        position: 'right',
+                        title: { display: true, text: 'K Tokens/sec', color: '#00d4ff' },
+                        ticks: { color: '#00d4ff' },
+                        grid: { drawOnChartArea: false }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
