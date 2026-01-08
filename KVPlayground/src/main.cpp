@@ -130,11 +130,13 @@ struct OperationStats {
             int64_t e2eP50 = getPercentile(lookupTimes, 50);
             int64_t e2eP90 = getPercentile(lookupTimes, 90);
             int64_t e2eP99 = getPercentile(lookupTimes, 99);
+            int64_t e2eP100 = getPercentile(lookupTimes, 100);
             
             std::cout << "\nLookup (" << lookupTimes.size() << " operations):\n";
             std::cout << "  Client E2E:      p50=" << (e2eP50 / 1000.0) << "ms, "
                       << "p90=" << (e2eP90 / 1000.0) << "ms, "
-                      << "p99=" << (e2eP99 / 1000.0) << "ms\n";
+                      << "p99=" << (e2eP99 / 1000.0) << "ms, "
+                      << "p100=" << (e2eP100 / 1000.0) << "ms\n";
             
             if (!lookupStorageTimes.empty() && !lookupServerTotalTimes.empty()) {
                 int64_t storageP50 = getPercentile(lookupStorageTimes, 50);
@@ -189,11 +191,13 @@ struct OperationStats {
             int64_t e2eP50 = getPercentile(writeTimes, 50);
             int64_t e2eP90 = getPercentile(writeTimes, 90);
             int64_t e2eP99 = getPercentile(writeTimes, 99);
+            int64_t e2eP100 = getPercentile(writeTimes, 100);
             
             std::cout << "\nWrite (" << writeTimes.size() << " operations):\n";
             std::cout << "  Client E2E:      p50=" << (e2eP50 / 1000.0) << "ms, "
                       << "p90=" << (e2eP90 / 1000.0) << "ms, "
-                      << "p99=" << (e2eP99 / 1000.0) << "ms\n";
+                      << "p99=" << (e2eP99 / 1000.0) << "ms, "
+                      << "p100=" << (e2eP100 / 1000.0) << "ms\n";
             
             if (!writeStorageTimes.empty() && !writeServerTotalTimes.empty()) {
                 int64_t storageP50 = getPercentile(writeStorageTimes, 50);
@@ -241,11 +245,13 @@ struct OperationStats {
             int64_t e2eP50 = getPercentile(readTimes, 50);
             int64_t e2eP90 = getPercentile(readTimes, 90);
             int64_t e2eP99 = getPercentile(readTimes, 99);
+            int64_t e2eP100 = getPercentile(readTimes, 100);
             
             std::cout << "\nRead (" << readTimes.size() << " streaming operations):\n";
             std::cout << "  Client E2E:      p50=" << (e2eP50 / 1000.0) << "ms, "
                       << "p90=" << (e2eP90 / 1000.0) << "ms, "
-                      << "p99=" << (e2eP99 / 1000.0) << "ms\n";
+                      << "p99=" << (e2eP99 / 1000.0) << "ms, "
+                      << "p100=" << (e2eP100 / 1000.0) << "ms\n";
             
             // For streaming: readStorageTimes contains MAX storage per stream
             if (!readStorageTimes.empty()) {

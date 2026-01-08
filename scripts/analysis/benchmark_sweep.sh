@@ -17,7 +17,7 @@ CSV_FILE="$OUTPUT_DIR/benchmark_results.csv"
 mkdir -p "$OUTPUT_DIR"
 
 # CSV header
-echo "processes,concurrency_per_process,total_concurrency,tps,tokens_per_sec,lookup_p50_ms,lookup_p90_ms,lookup_p99_ms,read_p50_ms,read_p90_ms,read_p99_ms" > "$CSV_FILE"
+echo "processes,concurrency_per_process,total_concurrency,tps,tokens_per_sec,lookup_p50_ms,lookup_p90_ms,lookup_p99_ms,lookup_p100_ms,read_p50_ms,read_p90_ms,read_p99_ms,read_p100_ms" > "$CSV_FILE"
 
 cd ~/kvgrpc
 export GRPC_VERBOSITY=error
@@ -87,24 +87,30 @@ run_benchmark() {
     ALL_LOOKUP_P50=""
     ALL_LOOKUP_P90=""
     ALL_LOOKUP_P99=""
+    ALL_LOOKUP_P100=""
     ALL_READ_P50=""
     ALL_READ_P90=""
     ALL_READ_P99=""
+    ALL_READ_P100=""
     
     for i in $(seq 1 $num_processes); do
         L50=$(extract_percentile /tmp/proc_${i}.log "Lookup" "p50")
         L90=$(extract_percentile /tmp/proc_${i}.log "Lookup" "p90")
         L99=$(extract_percentile /tmp/proc_${i}.log "Lookup" "p99")
+        L100=$(extract_percentile /tmp/proc_${i}.log "Lookup" "p100")
         R50=$(extract_percentile /tmp/proc_${i}.log "Read" "p50")
         R90=$(extract_percentile /tmp/proc_${i}.log "Read" "p90")
         R99=$(extract_percentile /tmp/proc_${i}.log "Read" "p99")
+        R100=$(extract_percentile /tmp/proc_${i}.log "Read" "p100")
         
         [ -n "$L50" ] && ALL_LOOKUP_P50="$ALL_LOOKUP_P50 $L50"
         [ -n "$L90" ] && ALL_LOOKUP_P90="$ALL_LOOKUP_P90 $L90"
         [ -n "$L99" ] && ALL_LOOKUP_P99="$ALL_LOOKUP_P99 $L99"
+        [ -n "$L100" ] && ALL_LOOKUP_P100="$ALL_LOOKUP_P100 $L100"
         [ -n "$R50" ] && ALL_READ_P50="$ALL_READ_P50 $R50"
         [ -n "$R90" ] && ALL_READ_P90="$ALL_READ_P90 $R90"
         [ -n "$R99" ] && ALL_READ_P99="$ALL_READ_P99 $R99"
+        [ -n "$R100" ] && ALL_READ_P100="$ALL_READ_P100 $R100"
     done
     
     # Average the percentiles across processes
@@ -115,17 +121,19 @@ run_benchmark() {
     LOOKUP_P50=$(avg $ALL_LOOKUP_P50)
     LOOKUP_P90=$(avg $ALL_LOOKUP_P90)
     LOOKUP_P99=$(avg $ALL_LOOKUP_P99)
+    LOOKUP_P100=$(avg $ALL_LOOKUP_P100)
     READ_P50=$(avg $ALL_READ_P50)
     READ_P90=$(avg $ALL_READ_P90)
     READ_P99=$(avg $ALL_READ_P99)
+    READ_P100=$(avg $ALL_READ_P100)
     
     # Print summary
     echo "    Elapsed: ${ELAPSED}s | TPS: $TPS | Tokens/s: ${KTOKENS_PER_SEC}K"
-    echo "    Lookup: p50=${LOOKUP_P50}ms p90=${LOOKUP_P90}ms p99=${LOOKUP_P99}ms"
-    echo "    Read:   p50=${READ_P50}ms p90=${READ_P90}ms p99=${READ_P99}ms"
+    echo "    Lookup: p50=${LOOKUP_P50}ms p90=${LOOKUP_P90}ms p99=${LOOKUP_P99}ms p100=${LOOKUP_P100}ms"
+    echo "    Read:   p50=${READ_P50}ms p90=${READ_P90}ms p99=${READ_P99}ms p100=${READ_P100}ms"
     
     # Append to CSV
-    echo "$num_processes,$concurrency,$total_concurrency,$TPS,$TOKENS_PER_SEC,$LOOKUP_P50,$LOOKUP_P90,$LOOKUP_P99,$READ_P50,$READ_P90,$READ_P99" >> "$CSV_FILE"
+    echo "$num_processes,$concurrency,$total_concurrency,$TPS,$TOKENS_PER_SEC,$LOOKUP_P50,$LOOKUP_P90,$LOOKUP_P99,$LOOKUP_P100,$READ_P50,$READ_P90,$READ_P99,$READ_P100" >> "$CSV_FILE"
 }
 
 echo ""

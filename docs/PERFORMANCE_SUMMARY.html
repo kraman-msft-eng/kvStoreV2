@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PERFORMANCE_SUMMARY.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="kvstore-performance-summary">KVStore Performance Summary</h1>
+<p><strong>Date:</strong> January 6, 2026<br>
+<strong>Server:</strong> Standard_E80ids_v4 (80 vCPUs, 2 NUMA nodes)<br>
+<strong>Network:</strong> 30 Gbps (8 NICs with Accelerated Networking)<br>
+<strong>Payload:</strong> 128 tokens per block (512 bytes per block)<br>
+<strong>Test Client:</strong> Azure Linux VM (same VNet, private gRPC connectivity)<br>
+<strong>Configuration:</strong> Dual NUMA (Port 8085 + 8086), 8 client processes</p>
+<hr>
+<h2 id="executive-summary">Executive Summary</h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Peak Throughput</strong></td>
+<td><strong>~94K tokens/sec</strong> (reads + writes)</td>
+</tr>
+<tr>
+<td><strong>Peak TPS</strong></td>
+<td>~82 iterations/sec</td>
+</tr>
+<tr>
+<td><strong>Optimal Concurrency</strong></td>
+<td>32-64 total (8 processes × 4-8 each)</td>
+</tr>
+<tr>
+<td><strong>Lookup Latency</strong></td>
+<td>p50=4.7ms, p99=12.5ms (at C=32)</td>
+</tr>
+<tr>
+<td><strong>Read Latency</strong></td>
+<td>p50=26ms, p99=69ms (at C=32)</td>
+</tr>
+<tr>
+<td><strong>Bottleneck</strong></td>
+<td>Azure Storage latency (~20-40ms per read)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Key Finding:</strong> Lookup is fast (~5ms) since it's metadata-only. Read latency dominates (~20-60ms) due to Azure Storage blob retrieval. Network is NOT the bottleneck.</p>
+<hr>
+<h2 id="%F0%9F%93%8A-interactive-charts">📊 Interactive Charts</h2>
+<p><strong><a href="./benchmark_charts.html">Open benchmark_charts.html</a></strong> in a browser for interactive performance charts.</p>
+<hr>
+<h2 id="benchmark-results-8-process-sweep">Benchmark Results (8-Process Sweep)</h2>
+<h3 id="token-calculation">Token Calculation</h3>
+<ul>
+<li><strong>Per iteration:</strong> 7 Lookups + 6 Reads + 3 Writes</li>
+<li><strong>Tokens transferred:</strong> 6 reads × 128 + 3 writes × 128 = <strong>1,152 tokens/iteration</strong></li>
+</ul>
+<h3 id="performance-by-concurrency">Performance by Concurrency</h3>
+<table>
+<thead>
+<tr>
+<th>Concurrency</th>
+<th>TPS</th>
+<th>K Tokens/s</th>
+<th>Lookup p50</th>
+<th>Lookup p90</th>
+<th>Lookup p99</th>
+<th>Read p50</th>
+<th>Read p90</th>
+<th>Read p99</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>3.6</td>
+<td>4.1</td>
+<td>4.95ms</td>
+<td>8.08ms</td>
+<td>11.16ms</td>
+<td>18.81ms</td>
+<td>20.75ms</td>
+<td>22.84ms</td>
+</tr>
+<tr>
+<td>2</td>
+<td>7.4</td>
+<td>8.5</td>
+<td>4.84ms</td>
+<td>7.91ms</td>
+<td>11.07ms</td>
+<td>19.17ms</td>
+<td>21.24ms</td>
+<td>25.51ms</td>
+</tr>
+<tr>
+<td>4</td>
+<td>14.6</td>
+<td>16.8</td>
+<td>4.72ms</td>
+<td>7.67ms</td>
+<td>10.80ms</td>
+<td>19.60ms</td>
+<td>22.06ms</td>
+<td>32.24ms</td>
+</tr>
+<tr>
+<td>6</td>
+<td>22.0</td>
+<td>25.3</td>
+<td>4.63ms</td>
+<td>7.55ms</td>
+<td>11.92ms</td>
+<td>20.19ms</td>
+<td>22.71ms</td>
+<td>28.79ms</td>
+</tr>
+<tr>
+<td>8</td>
+<td>28.8</td>
+<td>33.2</td>
+<td>4.72ms</td>
+<td>7.49ms</td>
+<td>12.07ms</td>
+<td>20.61ms</td>
+<td>23.52ms</td>
+<td>35.80ms</td>
+</tr>
+<tr>
+<td>16</td>
+<td>47.6</td>
+<td>54.8</td>
+<td>4.56ms</td>
+<td>7.33ms</td>
+<td>11.44ms</td>
+<td>22.29ms</td>
+<td>27.95ms</td>
+<td>43.36ms</td>
+</tr>
+<tr>
+<td><strong>32</strong> ⭐</td>
+<td><strong>65.8</strong></td>
+<td><strong>75.8</strong></td>
+<td>4.68ms</td>
+<td>6.46ms</td>
+<td>12.49ms</td>
+<td>25.96ms</td>
+<td>39.86ms</td>
+<td>69.17ms</td>
+</tr>
+<tr>
+<td>64</td>
+<td>80.5</td>
+<td>92.7</td>
+<td>5.23ms</td>
+<td>9.02ms</td>
+<td>23.54ms</td>
+<td>41.97ms</td>
+<td>83.60ms</td>
+<td>157.82ms</td>
+</tr>
+<tr>
+<td><strong>80</strong></td>
+<td><strong>81.5</strong></td>
+<td><strong>93.9</strong></td>
+<td>5.63ms</td>
+<td>11.54ms</td>
+<td>28.65ms</td>
+<td>57.04ms</td>
+<td>104.81ms</td>
+<td>166.90ms</td>
+</tr>
+</tbody>
+</table>
+<h3 id="key-observations">Key Observations</h3>
+<ol>
+<li><strong>Lookup latency is stable</strong>: p50 stays ~4.5-5.5ms across all concurrency levels</li>
+<li><strong>Read latency increases with load</strong>: p50 goes from 19ms (C=1) to 57ms (C=80)</li>
+<li><strong>Throughput plateaus at C=64-80</strong>: ~82 TPS / ~94K tokens/sec is the ceiling</li>
+<li><strong>Sweet spot is C=32</strong>: Best balance of throughput (76K tokens/s) and latency (p50=26ms)</li>
+</ol>
+<hr>
+<h2 id="latency-breakdown">Latency Breakdown</h2>
+<h3 id="lookup-metadata-query">Lookup (Metadata Query)</h3>
+<ul>
+<li><strong>Operation:</strong> Check if KV blocks exist in cache (hash-based)</li>
+<li><strong>Typical latency:</strong> 4-6ms p50, 7-12ms p99</li>
+<li><strong>No blob data transferred</strong> - just metadata</li>
+</ul>
+<h3 id="read-blob-retrieval">Read (Blob Retrieval)</h3>
+<ul>
+<li><strong>Operation:</strong> Stream token blocks from Azure Storage</li>
+<li><strong>Typical latency:</strong> 20-60ms p50, 70-170ms p99</li>
+<li><strong>Latency dominated by storage access time</strong></li>
+</ul>
+<h3 id="why-read--lookup">Why Read &gt;&gt; Lookup?</h3>
+<pre class="hljs"><code><div>Lookup: Client → gRPC → Server → Table Query → Response
+Read:   Client → gRPC → Server → Blob Download → Stream → Client
+                                      ↑
+                              ~15-30ms per blob
+</div></code></pre>
+<hr>
+<h2 id="recommended-operating-points">Recommended Operating Points</h2>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Total Concurrency</th>
+<th>Throughput</th>
+<th>Lookup p50</th>
+<th>Read p50</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Low Latency</strong></td>
+<td>8 (8×1)</td>
+<td>~33K tok/s</td>
+<td>4.7ms</td>
+<td>21ms</td>
+<td>Real-time, interactive</td>
+</tr>
+<tr>
+<td><strong>Balanced</strong> ⭐</td>
+<td>32 (8×4)</td>
+<td>~76K tok/s</td>
+<td>4.7ms</td>
+<td>26ms</td>
+<td>Web apps, APIs</td>
+</tr>
+<tr>
+<td><strong>High Throughput</strong></td>
+<td>64 (8×8)</td>
+<td>~93K tok/s</td>
+<td>5.2ms</td>
+<td>42ms</td>
+<td>Batch processing</td>
+</tr>
+<tr>
+<td><strong>Max Throughput</strong></td>
+<td>80 (8×10)</td>
+<td>~94K tok/s</td>
+<td>5.6ms</td>
+<td>57ms</td>
+<td>Background jobs</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="capacity-planning">Capacity Planning</h2>
+<h3 id="single-server-capacity">Single Server Capacity</h3>
+<table>
+<thead>
+<tr>
+<th>Latency SLA</th>
+<th>Recommended Config</th>
+<th>Throughput</th>
+<th>TPS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read p50 &lt; 25ms</td>
+<td>8 processes × 1</td>
+<td>~33K tok/s</td>
+<td>29</td>
+</tr>
+<tr>
+<td>Read p50 &lt; 30ms</td>
+<td>8 processes × 2</td>
+<td>~55K tok/s</td>
+<td>48</td>
+</tr>
+<tr>
+<td>Read p50 &lt; 45ms</td>
+<td>8 processes × 8</td>
+<td>~93K tok/s</td>
+<td>81</td>
+</tr>
+<tr>
+<td>Read p50 &lt; 60ms</td>
+<td>8 processes × 10</td>
+<td>~94K tok/s</td>
+<td>82</td>
+</tr>
+</tbody>
+</table>
+<h3 id="scaling-formula">Scaling Formula</h3>
+<pre class="hljs"><code><div>Servers Needed = Target_Throughput ÷ Per_Server_Capacity
+
+Example: 1M tokens/sec with p50 &lt; 30ms
+- Per server: ~55K tokens/sec (8×2 config)  
+- Servers: 1,000,000 ÷ 55,000 ≈ 19 servers
+</div></code></pre>
+<hr>
+<h2 id="summary">Summary</h2>
+<h3 id="key-metrics">Key Metrics</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Peak Throughput</strong></td>
+<td>~94K tokens/sec</td>
+</tr>
+<tr>
+<td><strong>Optimal Concurrency</strong></td>
+<td>32 (8 processes × 4)</td>
+</tr>
+<tr>
+<td><strong>Lookup Latency</strong></td>
+<td>p50=4.7ms (stable)</td>
+</tr>
+<tr>
+<td><strong>Read Latency</strong></td>
+<td>p50=26ms at C=32, 57ms at C=80</td>
+</tr>
+<tr>
+<td><strong>Bottleneck</strong></td>
+<td>Azure Storage latency</td>
+</tr>
+</tbody>
+</table>
+<h3 id="key-insights">Key Insights</h3>
+<ol>
+<li><strong>Lookup is fast and stable</strong> (~5ms) - metadata query only</li>
+<li><strong>Read latency scales with concurrency</strong> - 20ms→60ms as load increases</li>
+<li><strong>Throughput plateaus at ~94K tokens/sec</strong> - storage-bound</li>
+<li><strong>Sweet spot is C=32</strong> - best throughput/latency balance</li>
+</ol>
+<hr>
+<p><em>Generated from benchmark sweep on January 6, 2026</em>
+<em>See <a href="./benchmark_charts.html">benchmark_charts.html</a> for interactive charts</em></p>
+
+</body>
+</html>

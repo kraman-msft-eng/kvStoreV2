@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>TOPOLOGY.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="kvstore-data-plane---regional-topology">KVStore Data Plane - Regional Topology</h1>
+<p>This document explains the architecture and topology of the KVStore data plane, including how regions are set up, how clusters are deployed, and how customers connect via private networking.</p>
+<h2 id="overview">Overview</h2>
+<p>The KVStore data plane is organized into <strong>regions</strong>, each containing shared infrastructure and one or more Service Fabric managed clusters. Customer access is provided through <strong>private endpoints</strong> using VNet peering and internal load balancers.</p>
+<pre class="hljs"><code><div>┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              Azure Region (e.g., westus2)                       │
+│                                                                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                     KVStore Regional VNet (10.0.0.0/16)                   │  │
+│  │                                                                           │  │
+│  │  ┌─────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │                    Subnet: kvstore-subnet (10.0.0.0/24)             │  │  │
+│  │  │                                                                     │  │  │
+│  │  │   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐            │  │  │
+│  │  │   │ SF Cluster  │    │ SF Cluster  │    │ SF Cluster  │            │  │  │
+│  │  │   │ kvs-wus2-01 │    │ kvs-wus2-02 │    │ kvs-wus2-03 │   ...      │  │  │
+│  │  │   │             │    │             │    │             │            │  │  │
+│  │  │   │ ┌─────────┐ │    │ ┌─────────┐ │    │ ┌─────────┐ │            │  │  │
+│  │  │   │ │ App VMs │ │    │ │ App VMs │ │    │ │ App VMs │ │            │  │  │
+│  │  │   │ │ (3-10)  │ │    │ │ (3-10)  │ │    │ │ (3-10)  │ │            │  │  │
+│  │  │   │ └────┬────┘ │    │ └────┬────┘ │    │ └────┬────┘ │            │  │  │
+│  │  │   └──────┼──────┘    └──────┼──────┘    └──────┼──────┘            │  │  │
+│  │  │          │                  │                  │                   │  │  │
+│  │  │          └──────────────────┼──────────────────┘                   │  │  │
+│  │  │                             │                                      │  │  │
+│  │  │                    ┌────────▼────────┐                             │  │  │
+│                    │  Internal LB    │                             │  │  │
+│                    │  (Regional)     │                             │  │  │
+│                    │   10.0.0.4      │                             │  │  │
+│                    │  :8085 / :8086  │                             │  │  │
+│                    └────────┬────────┘                             │  │  │
+│  │  │                             │                                      │  │  │
+│  │  └─────────────────────────────┼──────────────────────────────────────┘  │  │
+│  │                                │                                         │  │
+│  └────────────────────────────────┼─────────────────────────────────────────┘  │
+│                                   │                                            │
+│                          VNet Peering                                          │
+│                                   │                                            │
+└───────────────────────────────────┼────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+        ▼                           ▼                           ▼
+┌───────────────────┐     ┌───────────────────┐     ┌───────────────────┐
+│  Customer VNet A  │     │  Customer VNet B  │     │  Customer VNet C  │
+│  (10.1.0.0/16)    │     │  (10.2.0.0/16)    │     │  (172.16.0.0/16)  │
+│                   │     │                   │     │                   │
+│  ┌─────────────┐  │     │  ┌─────────────┐  │     │  ┌─────────────┐  │
+│  │ Customer    │  │     │  │ Customer    │  │     │  │ Customer    │  │
+│  │ Application │  │     │  │ Application │  │     │  │ Application │  │
+│  └─────────────┘  │     │  └─────────────┘  │     │  └─────────────┘  │
+└───────────────────┘     └───────────────────┘     └───────────────────┘
+</div></code></pre>
+<h2 id="shared-regional-assets">Shared Regional Assets</h2>
+<p>Each region contains shared infrastructure that is used by all clusters in that region.</p>
+<h3 id="1-prompt-metadata-storage-account">1. Prompt Metadata Storage Account</h3>
+<p>The regional <strong>prompt metadata storage account</strong> stores configuration metadata and is accessed by all clusters.</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Example Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td><code>promptdatawestus2</code></td>
+</tr>
+<tr>
+<td>Resource Group</td>
+<td><code>azureprompt_dp</code></td>
+</tr>
+<tr>
+<td>Container</td>
+<td><code>dataplane-metadata</code></td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Cluster configs, routing tables, customer mappings</td>
+</tr>
+<tr>
+<td>Access</td>
+<td>UAMI with Storage Blob Data Contributor</td>
+</tr>
+</tbody>
+</table>
+<h3 id="2-user-content-storage-accounts">2. User Content Storage Accounts</h3>
+<p>User-generated content (KV data) is stored in <strong>customer-specific storage accounts</strong> in a dedicated resource group. This separation provides:</p>
+<ul>
+<li>Isolation of customer data</li>
+<li>Independent scaling per customer</li>
+<li>Simplified access control</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Example Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Resource Group</td>
+<td><code>promptservice-regional-storage-westus2</code></td>
+</tr>
+<tr>
+<td>Storage Accounts</td>
+<td>One per customer (e.g., <code>customerAstorage</code>, <code>customerBstorage</code>)</td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Customer KV data (keys, values, embeddings)</td>
+</tr>
+<tr>
+<td>Access</td>
+<td>UAMI with Storage Blob Data Contributor</td>
+</tr>
+</tbody>
+</table>
+<h3 id="3-user-assigned-managed-identity-uami">3. User-Assigned Managed Identity (UAMI)</h3>
+<p>A shared managed identity that Service Fabric clusters use to access Azure resources.</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Example Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td><code>kvstore-svc-westus2</code></td>
+</tr>
+<tr>
+<td>Client ID</td>
+<td><code>4c1be51a-e029-46b7-a595-360d4628454a</code></td>
+</tr>
+<tr>
+<td>Resource Group</td>
+<td><code>azureprompt_dp</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="uami-role-assignments">UAMI Role Assignments</h4>
+<p>The UAMI is granted permissions across multiple resource groups:</p>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>Role</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>promptdatawestus2</code> (storage)</td>
+<td>Storage Blob Data Contributor</td>
+<td>Read/write dataplane metadata</td>
+</tr>
+<tr>
+<td><code>promptservice-regional-storage-westus2</code> (RG)</td>
+<td>Storage Blob Data Contributor</td>
+<td>Read/write all customer storage accounts</td>
+</tr>
+<tr>
+<td><code>kvstore-kv-westus2</code> (key vault)</td>
+<td>Key Vault Secrets User</td>
+<td>Read certificates and secrets</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note</strong>: The UAMI is assigned to the entire <code>promptservice-regional-storage-westus2</code> resource group, which automatically grants access to all current and future customer storage accounts in that RG.</p>
+</blockquote>
+<h3 id="4-key-vault">4. Key Vault</h3>
+<p>Stores certificates and secrets for cluster authentication.</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Example Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td><code>kvstore-kv-westus2</code></td>
+</tr>
+<tr>
+<td>Resource Group</td>
+<td><code>azureprompt_dp</code></td>
+</tr>
+<tr>
+<td>Server Cert</td>
+<td>Used by SF clusters for management</td>
+</tr>
+<tr>
+<td>Client Cert</td>
+<td>Used by deployment scripts</td>
+</tr>
+</tbody>
+</table>
+<h3 id="5-virtual-network-vnet">5. Virtual Network (VNet)</h3>
+<p>A dedicated VNet for the KVStore data plane in each region.</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Example Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td><code>kvstore-vnet-westus2</code></td>
+</tr>
+<tr>
+<td>Resource Group</td>
+<td><code>azureprompt_dp</code></td>
+</tr>
+<tr>
+<td>Address Space</td>
+<td><code>10.0.0.0/16</code></td>
+</tr>
+<tr>
+<td>Subnet</td>
+<td><code>kvstore-subnet</code> (<code>10.0.0.0/24</code>)</td>
+</tr>
+<tr>
+<td>NSG</td>
+<td><code>kvstore-nsg-westus2</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="6-internal-load-balancer-ilb">6. Internal Load Balancer (ILB)</h3>
+<p>A shared internal load balancer that provides the regional private endpoint.</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Example Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td><code>kvs-wus2-01-ilb</code></td>
+</tr>
+<tr>
+<td>Resource Group</td>
+<td><code>azureprompt_dp</code></td>
+</tr>
+<tr>
+<td>Private IP</td>
+<td><code>10.0.0.4</code></td>
+</tr>
+<tr>
+<td>Port (NUMA 0)</td>
+<td><code>8085</code> (gRPC)</td>
+</tr>
+<tr>
+<td>Port (NUMA 1)</td>
+<td><code>8086</code> (gRPC)</td>
+</tr>
+<tr>
+<td>Backend Pool</td>
+<td>All App node VMs</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note</strong>: Each App VM runs two NUMA-pinned KVStoreServer processes:</p>
+<ul>
+<li><strong>NUMA Node 0</strong> listens on port <code>8085</code></li>
+<li><strong>NUMA Node 1</strong> listens on port <code>8086</code></li>
+</ul>
+<p>The ILB has separate rules and health probes for each port. Clients connect to either <code>10.0.0.4:8085</code> or <code>10.0.0.4:8086</code> depending on which NUMA node they want to target.</p>
+</blockquote>
+<h2 id="resource-group-summary">Resource Group Summary</h2>
+<p>The regional infrastructure spans multiple resource groups:</p>
+<table>
+<thead>
+<tr>
+<th>Resource Group</th>
+<th>Purpose</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>azureprompt_dp</code></td>
+<td>Dataplane infrastructure</td>
+<td>VNet, ILB, Key Vault, UAMI, Prompt Metadata Storage, SF Clusters</td>
+</tr>
+<tr>
+<td><code>promptservice-regional-storage-westus2</code></td>
+<td>User content storage</td>
+<td>Per-customer storage accounts</td>
+</tr>
+<tr>
+<td><code>SFC_&lt;cluster-guid&gt;</code></td>
+<td>SF managed resources</td>
+<td>VMSS, managed disks (auto-created by SF)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="service-fabric-cluster-architecture">Service Fabric Cluster Architecture</h2>
+<p>Each cluster uses the <strong>BYOVNET + BYOLB</strong> (Bring Your Own VNet + Bring Your Own Load Balancer) pattern.</p>
+<h3 id="byovnet-bring-your-own-vnet">BYOVNET (Bring Your Own VNet)</h3>
+<p>Clusters are deployed INTO the shared regional VNet using the <code>subnetId</code> property. This allows:</p>
+<ul>
+<li>All clusters to share the same network space</li>
+<li>Consistent network policies via shared NSG</li>
+<li>Single VNet peering point for customers</li>
+</ul>
+<h3 id="byolb-bring-your-own-load-balancer">BYOLB (Bring Your Own Load Balancer)</h3>
+<p>The App node type uses <code>frontendConfigurations</code> to point to the shared internal load balancer:</p>
+<ul>
+<li>Traffic on port 8085 is routed to NUMA Node 0 processes</li>
+<li>Traffic on port 8086 is routed to NUMA Node 1 processes</li>
+<li>Each VM runs two KVStoreServer processes, each pinned to a NUMA node and listening on its respective port</li>
+<li>Default 5-tuple hash load distribution</li>
+<li>Separate health probes for each port ensure only healthy instances receive traffic</li>
+</ul>
+<h3 id="dual-port-numa-architecture">Dual-Port NUMA Architecture</h3>
+<p>Instead of multi-NIC binding (which has asymmetric routing issues with Azure LB), we use a <strong>dual-port architecture</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>NUMA Node</th>
+<th>Port</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>8085</td>
+<td>Process pinned to NUMA 0 (40 cores)</td>
+</tr>
+<tr>
+<td>1</td>
+<td>8086</td>
+<td>Process pinned to NUMA 1 (40 cores)</td>
+</tr>
+</tbody>
+</table>
+<p>This provides:</p>
+<ul>
+<li><strong>Full NUMA utilization</strong>: Each NUMA node has dedicated memory and CPU cores</li>
+<li><strong>Independent health monitoring</strong>: Each port has its own LB health probe</li>
+<li><strong>Simple client targeting</strong>: Clients can choose which NUMA node to target by port</li>
+<li><strong>Reliable LB distribution</strong>: No asymmetric routing issues</li>
+</ul>
+<blockquote>
+<p><strong>Note</strong>: The previous multi-NIC approach (both NICs on port 8085) didn't work because Azure's health probe (168.63.129.16) only routes via the primary NIC, causing the secondary NIC's health probe to fail.</p>
+</blockquote>
+<h3 id="node-types">Node Types</h3>
+<p>Each cluster has two node types:</p>
+<table>
+<thead>
+<tr>
+<th>Node Type</th>
+<th>Purpose</th>
+<th>VM Size</th>
+<th>Count</th>
+<th>Load Balancer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>System</strong></td>
+<td>SF system services</td>
+<td>Standard_D2s_v5</td>
+<td>5</td>
+<td>Public (SF managed)</td>
+</tr>
+<tr>
+<td><strong>App</strong></td>
+<td>KVStoreServer application</td>
+<td>Standard_E80ids_v4</td>
+<td>1+</td>
+<td>Internal (BYOLB)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note</strong>: The App node type uses <code>Standard_E80ids_v4</code> isolated VMs with 80 vCPUs, 80 Gbps network, and 2 NUMA nodes. Each VM runs two KVStoreServer processes:</p>
+<ul>
+<li>NUMA Node 0 process listens on port 8085</li>
+<li>NUMA Node 1 process listens on port 8086</li>
+</ul>
+</blockquote>
+<h3 id="cluster-configuration">Cluster Configuration</h3>
+<pre class="hljs"><code><div>┌──────────────────────────────────────────────────────────────┐
+│                    SF Managed Cluster                        │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │              System Node Type (Primary)                │  │
+│  │  • 5 VMs (Standard_D2s_v5)                             │  │
+│  │  • Runs SF system services                             │  │
+│  │  • Public LB for SF management (:19000, :19080)        │  │
+│  │  • useDefaultPublicLoadBalancer: true                  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  │  │                App Node Type                           │  │
+│  │  • 1+ VMs (Standard_E80ids_v4 - 80 cores, 2 NUMA)      │  │
+│  │  • Runs 2x KVStoreServer per VM (NUMA-pinned)          │  │
+│  │  • Port 8085 → NUMA Node 0, Port 8086 → NUMA Node 1   │  │
+│  │  • Internal LB with dual health probes                 │  │
+│  │  • frontendConfigurations → kvs-wus2-01-ilb            │  │
+│  │  • useDefaultPublicLoadBalancer: true (outbound only)  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+</div></code></pre>
+<h2 id="customer-connectivity">Customer Connectivity</h2>
+<p>Customers connect to the KVStore service via <strong>VNet peering</strong> to access the private internal load balancer endpoint.</p>
+<h3 id="vnet-peering-process">VNet Peering Process</h3>
+<pre class="hljs"><code><div>   KVStore Team                                    Customer
+       │                                               │
+       │  1. Customer provides VNet ID                 │
+       │◄──────────────────────────────────────────────│
+       │                                               │
+       │  2. Run AddClientVNetToRegion.ps1             │
+       │─────────────────────────────────────────────► │
+       │                                               │
+       │  3. Provide PromptServiceVNetId + Endpoint    │
+       │─────────────────────────────────────────────► │
+       │                                               │
+       │  4. Customer runs PeerToPromptService.ps1     │
+       │◄────────────────────────────────────────────  │
+       │                                               │
+       │         Bidirectional Peering Complete        │
+       │◄─────────────────────────────────────────────►│
+       │                                               │
+       │  5. Customer accesses 10.0.0.4:8085 or :8086     │
+       │◄──────────────────────────────────────────────────│
+</div></code></pre>
+<h3 id="peering-requirements">Peering Requirements</h3>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>No Overlapping Address Space</strong></td>
+<td>Customer VNet must not use the same CIDR as the KVStore VNet or any other peered VNet</td>
+</tr>
+<tr>
+<td><strong>Network Contributor</strong></td>
+<td>Both parties need Network Contributor on their respective VNets</td>
+</tr>
+<tr>
+<td><strong>NSG Rules</strong></td>
+<td>Customer NSG must allow outbound TCP to ports 8085 and 8086</td>
+</tr>
+</tbody>
+</table>
+<h3 id="example-endpoint-access">Example Endpoint Access</h3>
+<p>After peering is complete, customers can access the service:</p>
+<pre class="hljs"><code><div><span class="hljs-comment"># From customer's VM - NUMA Node 0</span>
+./KVClient 10.0.0.4:8085
+
+<span class="hljs-comment"># From customer's VM - NUMA Node 1  </span>
+./KVClient 10.0.0.4:8086
+
+<span class="hljs-comment"># gRPC endpoints</span>
+grpc://10.0.0.4:8085  <span class="hljs-comment"># NUMA 0</span>
+grpc://10.0.0.4:8086  <span class="hljs-comment"># NUMA 1</span>
+</div></code></pre>
+<blockquote>
+<p><strong>Note</strong>: Two ports are exposed to clients (8085 for NUMA Node 0, 8086 for NUMA Node 1). The load balancer distributes traffic for each port to the corresponding NUMA-pinned process on each App VM.</p>
+</blockquote>
+<h2 id="configuration-files">Configuration Files</h2>
+<h3 id="region-configuration-configregionregionconfigjson">Region Configuration (<code>config/&lt;region&gt;/region.config.json</code>)</h3>
+<p>Contains shared regional settings:</p>
+<pre class="hljs"><code><div>{
+  <span class="hljs-attr">"region"</span>: <span class="hljs-string">"westus2"</span>,
+  <span class="hljs-attr">"azure"</span>: {
+    <span class="hljs-attr">"resourceGroupName"</span>: <span class="hljs-string">"azureprompt_dp"</span>,
+    <span class="hljs-attr">"subscriptionId"</span>: <span class="hljs-string">"..."</span>,
+    <span class="hljs-attr">"location"</span>: <span class="hljs-string">"westus2"</span>
+  },
+  <span class="hljs-attr">"network"</span>: {
+    <span class="hljs-attr">"vnetName"</span>: <span class="hljs-string">"kvstore-vnet-westus2"</span>,
+    <span class="hljs-attr">"subnetName"</span>: <span class="hljs-string">"kvstore-subnet"</span>,
+    <span class="hljs-attr">"vnetAddressPrefix"</span>: <span class="hljs-string">"10.0.0.0/16"</span>,
+    <span class="hljs-attr">"subnetAddressPrefix"</span>: <span class="hljs-string">"10.0.0.0/24"</span>
+  },
+  <span class="hljs-attr">"identity"</span>: {
+    <span class="hljs-attr">"uamiName"</span>: <span class="hljs-string">"kvstore-svc-westus2"</span>,
+    <span class="hljs-attr">"uamiClientId"</span>: <span class="hljs-string">"..."</span>
+  },
+  <span class="hljs-attr">"dataplane"</span>: {
+    <span class="hljs-attr">"configStorageAccount"</span>: <span class="hljs-string">"promptdatawestus2"</span>,
+    <span class="hljs-attr">"grpcPortNuma0"</span>: <span class="hljs-number">8085</span>,
+    <span class="hljs-attr">"grpcPortNuma1"</span>: <span class="hljs-number">8086</span>,
+    <span class="hljs-attr">"grpcPorts"</span>: [<span class="hljs-number">8085</span>, <span class="hljs-number">8086</span>]
+  }
+}
+</div></code></pre>
+<h3 id="cluster-configuration-configregionclusterconfigjson">Cluster Configuration (<code>config/&lt;region&gt;/&lt;cluster&gt;.config.json</code>)</h3>
+<p>Contains cluster-specific settings:</p>
+<pre class="hljs"><code><div>{
+  <span class="hljs-attr">"cluster"</span>: {
+    <span class="hljs-attr">"name"</span>: <span class="hljs-string">"kvs-wus2-01"</span>,
+    <span class="hljs-attr">"endpoint"</span>: <span class="hljs-string">"kvs-wus2-01.westus2.cloudapp.azure.com:19000"</span>,
+    <span class="hljs-attr">"serverCertThumbprint"</span>: <span class="hljs-string">"..."</span>
+  },
+  <span class="hljs-attr">"byolb"</span>: {
+    <span class="hljs-attr">"internalLoadBalancerName"</span>: <span class="hljs-string">"kvs-wus2-01-ilb"</span>,
+    <span class="hljs-attr">"privateIp"</span>: <span class="hljs-string">"10.0.0.4"</span>
+  },
+  <span class="hljs-attr">"nodeTypes"</span>: {
+    <span class="hljs-attr">"system"</span>: { <span class="hljs-attr">"name"</span>: <span class="hljs-string">"System"</span>, <span class="hljs-attr">"instanceCount"</span>: <span class="hljs-number">5</span> },
+    <span class="hljs-attr">"app"</span>: { <span class="hljs-attr">"name"</span>: <span class="hljs-string">"App"</span>, <span class="hljs-attr">"instanceCount"</span>: <span class="hljs-number">3</span> }
+  }
+}
+</div></code></pre>
+<h2 id="scripts-reference">Scripts Reference</h2>
+<h3 id="region-setup">Region Setup</h3>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scripts/init/InitRegion.ps1</code></td>
+<td>Initialize a new region with VNet, UAMI, Key Vault</td>
+</tr>
+<tr>
+<td><code>scripts/dataplane/AddCluster.ps1</code></td>
+<td>Add a new SF cluster to a region</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cluster-management">Cluster Management</h3>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scripts/dataplane/AddCluster.ps1</code></td>
+<td>Create cluster with BYOVNET + BYOLB</td>
+</tr>
+<tr>
+<td><code>scripts/dataplane/DeployApp.ps1</code></td>
+<td>Deploy KVStoreServer application</td>
+</tr>
+<tr>
+<td><code>scripts/dataplane/RemoveCluster.ps1</code></td>
+<td>Remove a cluster from a region</td>
+</tr>
+</tbody>
+</table>
+<h3 id="customer-vnet-peering">Customer VNet Peering</h3>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+<th>Run By</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scripts/dataplane/AddClientVNetToRegion.ps1</code></td>
+<td>Create peering from KVStore → Customer VNet</td>
+<td>KVStore Team</td>
+</tr>
+<tr>
+<td><code>scripts/dataplane/PeerToPromptService.ps1</code></td>
+<td>Create peering from Customer → KVStore VNet</td>
+<td>Customer</td>
+</tr>
+</tbody>
+</table>
+<h3 id="testing--benchmarking">Testing &amp; Benchmarking</h3>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scripts/run/run_azure_linux_cluster.ps1</code></td>
+<td>Test from Linux VM via internal LB</td>
+</tr>
+<tr>
+<td><code>scripts/run/benchmark_run.ps1</code></td>
+<td>One-click benchmark sweep with chart generation</td>
+</tr>
+<tr>
+<td><code>scripts/deploy/deploy_client.ps1</code></td>
+<td>Deploy KVPlayground client + benchmark scripts to Linux VM</td>
+</tr>
+</tbody>
+</table>
+<h3 id="benchmark-analysis">Benchmark Analysis</h3>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scripts/analysis/benchmark_sweep.sh</code></td>
+<td>Multi-process benchmark sweep (runs on Linux VM)</td>
+</tr>
+<tr>
+<td><code>scripts/analysis/generate_charts.py</code></td>
+<td>Generate interactive HTML charts from results</td>
+</tr>
+</tbody>
+</table>
+<h2 id="adding-a-new-cluster">Adding a New Cluster</h2>
+<p>To add a new cluster to an existing region:</p>
+<pre class="hljs"><code><div><span class="hljs-comment"># 1. Create the cluster with BYOVNET + BYOLB</span>
+.\scripts\dataplane\AddCluster.ps1 `
+    <span class="hljs-literal">-ClusterName</span> <span class="hljs-string">"kvs-wus2-02"</span> `
+    <span class="hljs-literal">-RegionName</span> <span class="hljs-string">"westus2"</span> `
+    <span class="hljs-literal">-AdminPassword</span> (<span class="hljs-built_in">ConvertTo-SecureString</span> <span class="hljs-string">"YourPassword!"</span> <span class="hljs-literal">-AsPlainText</span> <span class="hljs-literal">-Force</span>) `
+    <span class="hljs-literal">-UseInternalLoadBalancer</span>
+
+<span class="hljs-comment"># 2. Deploy the application</span>
+.\scripts\dataplane\DeployApp.ps1 `
+    <span class="hljs-literal">-ClusterName</span> <span class="hljs-string">"kvs-wus2-02"</span> `
+    <span class="hljs-literal">-RegionName</span> <span class="hljs-string">"westus2"</span>
+</div></code></pre>
+<p>The new cluster's App nodes will automatically be added to the shared internal load balancer's backend pool.</p>
+<h2 id="adding-a-new-customer-vnet">Adding a New Customer VNet</h2>
+<p>To peer a customer VNet:</p>
+<pre class="hljs"><code><div><span class="hljs-comment"># 1. KVStore team runs (after customer provides their VNet ID)</span>
+.\scripts\dataplane\AddClientVNetToRegion.ps1 `
+    <span class="hljs-literal">-ClientVNetId</span> <span class="hljs-string">"/subscriptions/.../virtualNetworks/customer-vnet"</span> `
+    <span class="hljs-literal">-RegionName</span> <span class="hljs-string">"westus2"</span>
+
+<span class="hljs-comment"># 2. Customer runs (with info provided by KVStore team)</span>
+.\PeerToPromptService.ps1 `
+    <span class="hljs-literal">-PromptServiceVNetId</span> <span class="hljs-string">"/subscriptions/.../virtualNetworks/kvstore-vnet-westus2"</span> `
+    <span class="hljs-literal">-ClientVNetName</span> <span class="hljs-string">"customer-vnet"</span> `
+    <span class="hljs-literal">-ClientVNetResourceGroup</span> <span class="hljs-string">"customer-rg"</span>
+</div></code></pre>
+<h2 id="scaling-considerations">Scaling Considerations</h2>
+<h3 id="horizontal-scaling">Horizontal Scaling</h3>
+<ul>
+<li><strong>Add more clusters</strong>: Each cluster adds more App nodes to the regional backend pool</li>
+<li><strong>Scale out App nodes</strong>: Increase <code>instanceCount</code> for the App node type</li>
+<li><strong>Scale out System nodes</strong>: Increase count for higher SF management capacity</li>
+</ul>
+<h3 id="regional-expansion">Regional Expansion</h3>
+<p>To add a new region:</p>
+<ol>
+<li>Run <code>InitRegion.ps1</code> to create shared assets</li>
+<li>Run <code>AddCluster.ps1</code> to create the first cluster</li>
+<li>Run <code>DeployApp.ps1</code> to deploy the application</li>
+<li>Set up VNet peering for customers in that region</li>
+</ol>
+<h2 id="security-model">Security Model</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Protection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Network</strong></td>
+<td>Private VNet, NSG rules, no public ingress</td>
+</tr>
+<tr>
+<td><strong>Transport</strong></td>
+<td>gRPC over TLS</td>
+</tr>
+<tr>
+<td><strong>Identity</strong></td>
+<td>UAMI for Azure resource access</td>
+</tr>
+<tr>
+<td><strong>Data</strong></td>
+<td>Azure Storage encryption at rest</td>
+</tr>
+</tbody>
+</table>
+<h2 id="client-testing-infrastructure">Client Testing Infrastructure</h2>
+<p>For benchmarking and testing, we use a <strong>Linux VM</strong> in a peered VNet that accesses the KVStore service via the internal load balancer.</p>
+<h3 id="linux-client-vm">Linux Client VM</h3>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Public IP</strong></td>
+<td><code>20.115.133.84</code></td>
+</tr>
+<tr>
+<td><strong>Private IP</strong></td>
+<td><code>10.1.1.4</code></td>
+</tr>
+<tr>
+<td><strong>VNet</strong></td>
+<td>Peered to <code>kvstore-vnet-westus2</code></td>
+</tr>
+<tr>
+<td><strong>SSH Key</strong></td>
+<td><code>kvClient.pem</code></td>
+</tr>
+<tr>
+<td><strong>Working Dir</strong></td>
+<td><code>~/kvgrpc/</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="client-components">Client Components</h3>
+<pre class="hljs"><code><div>~/kvgrpc/
+├── KVPlayground          # Benchmark executable
+├── conversation_tokens.json  # Test data (token blocks)
+├── benchmark_sweep.sh    # Multi-process benchmark script
+└── generate_charts.py    # Chart generator
+</div></code></pre>
+<h3 id="running-benchmarks">Running Benchmarks</h3>
+<p><strong>Option 1: One-click from Windows (recommended)</strong></p>
+<pre class="hljs"><code><div><span class="hljs-comment"># Run benchmark sweep and generate charts</span>
+.\scripts\run\benchmark_run.ps1
+
+<span class="hljs-comment"># Just regenerate charts from existing data</span>
+.\scripts\run\benchmark_run.ps1 <span class="hljs-literal">-SkipBenchmark</span> <span class="hljs-literal">-OpenChart</span>
+</div></code></pre>
+<p><strong>Option 2: Manual SSH</strong></p>
+<pre class="hljs"><code><div><span class="hljs-comment"># SSH to Linux VM</span>
+ssh -i C:\Users\kraman\Downloads\kvClient.pem azureuser@20.115.133.84
+
+<span class="hljs-comment"># Run benchmark</span>
+<span class="hljs-built_in">cd</span> ~/kvgrpc
+./benchmark_sweep.sh
+</div></code></pre>
+<h3 id="benchmark-architecture">Benchmark Architecture</h3>
+<pre class="hljs"><code><div>┌─────────────────────────────────────────────────────────────────────────┐
+│                     Benchmark Sweep (benchmark_sweep.sh)                │
+│                                                                         │
+│  ┌─────────────┐  ┌─────────────┐       ┌─────────────┐                │
+│  │ Process 1   │  │ Process 2   │  ...  │ Process 8   │                │
+│  │ NUMA0:8085  │  │ NUMA1:8086  │       │ NUMA0:8085  │                │
+│  └──────┬──────┘  └──────┬──────┘       └──────┬──────┘                │
+│         │                │                     │                        │
+└─────────┼────────────────┼─────────────────────┼────────────────────────┘
+          │                │                     │
+          └────────────────┼─────────────────────┘
+                           │ VNet Peering
+                           ▼
+        ┌──────────────────────────────────────────┐
+        │        Internal Load Balancer            │
+        │           10.0.0.4                       │
+        │     Port 8085 (NUMA0) / 8086 (NUMA1)     │
+        └──────────────────┬───────────────────────┘
+                           │
+        ┌──────────────────┼──────────────────────┐
+        │                  │                      │
+        ▼                  ▼                      ▼
+┌──────────────┐   ┌──────────────┐       ┌──────────────┐
+│   App VM 0   │   │   App VM 1   │  ...  │   App VM N   │
+│              │   │              │       │              │
+│ ┌──────────┐ │   │ ┌──────────┐ │       │ ┌──────────┐ │
+│ │:8085     │ │   │ │:8085     │ │       │ │:8085     │ │
+│ │(NUMA0)   │ │   │ │(NUMA0)   │ │       │ │(NUMA0)   │ │
+│ ├──────────┤ │   │ ├──────────┤ │       │ ├──────────┤ │
+│ │:8086     │ │   │ │:8086     │ │       │ │:8086     │ │
+│ │(NUMA1)   │ │   │ │(NUMA1)   │ │       │ │(NUMA1)   │ │
+│ └──────────┘ │   │ └──────────┘ │       │ └──────────┘ │
+└──────────────┘   └──────────────┘       └──────────────┘
+</div></code></pre>
+<h3 id="deploying-client-updates">Deploying Client Updates</h3>
+<pre class="hljs"><code><div><span class="hljs-comment"># Deploy KVPlayground binary + benchmark scripts to Linux VM</span>
+.\scripts\deploy\deploy_client.ps1
+</div></code></pre>
+<p>This copies:</p>
+<ul>
+<li><code>KVPlayground</code> binary (built from <code>build/KVPlayground/</code>)</li>
+<li><code>benchmark_sweep.sh</code> (from <code>scripts/analysis/</code>)</li>
+<li><code>generate_charts.py</code> (from <code>scripts/analysis/</code>)</li>
+</ul>
+<h3 id="performance-results">Performance Results</h3>
+<p>See <strong><a href="./PERFORMANCE_SUMMARY.md">PERFORMANCE_SUMMARY.md</a></strong> and <strong><a href="./benchmark_charts.html">benchmark_charts.html</a></strong> for detailed benchmark results.</p>
+<p><strong>Summary:</strong></p>
+<ul>
+<li><strong>Peak throughput:</strong> ~94K tokens/sec (reads + writes)</li>
+<li><strong>Peak TPS:</strong> ~82 iterations/sec</li>
+<li><strong>Sweet spot:</strong> C=32 (8 processes × 4 concurrency each)</li>
+<li><strong>Lookup latency:</strong> p50=4.7ms (metadata only)</li>
+<li><strong>Read latency:</strong> p50=26ms at C=32 (Azure Storage bound)</li>
+</ul>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="common-issues">Common Issues</h3>
+<ol>
+<li>
+<p><strong>VNet Peering Fails - Address Space Overlap</strong></p>
+<ul>
+<li>Check for stale/disconnected peerings</li>
+<li>Ensure customer VNet doesn't overlap with <code>10.0.0.0/16</code></li>
+</ul>
+</li>
+<li>
+<p><strong>Cannot Connect to Internal LB</strong></p>
+<ul>
+<li>Verify VNet peering is in &quot;Connected&quot; state on both sides</li>
+<li>Check NSG allows outbound TCP on ports 8085 and 8086</li>
+<li>Verify internal LB health probe is passing</li>
+</ul>
+</li>
+<li>
+<p><strong>Application Not Responding</strong></p>
+<ul>
+<li>Check SF cluster health via Explorer</li>
+<li>Verify KVStoreServer is deployed and healthy</li>
+<li>Check App node count &gt; 0</li>
+</ul>
+</li>
+</ol>
+<h3 id="useful-commands">Useful Commands</h3>
+<pre class="hljs"><code><div><span class="hljs-comment"># Check cluster status</span>
+az sf managed<span class="hljs-literal">-cluster</span> show -<span class="hljs-literal">-cluster</span><span class="hljs-literal">-name</span> kvs<span class="hljs-literal">-wus2</span><span class="hljs-literal">-01</span> -<span class="hljs-literal">-resource</span><span class="hljs-literal">-group</span> azureprompt_dp
+
+<span class="hljs-comment"># Check ILB backend pool</span>
+az network lb address<span class="hljs-literal">-pool</span> show -<span class="hljs-literal">-lb</span><span class="hljs-literal">-name</span> kvs<span class="hljs-literal">-wus2</span><span class="hljs-literal">-01</span><span class="hljs-literal">-ilb</span> -<span class="hljs-literal">-resource</span><span class="hljs-literal">-group</span> azureprompt_dp -<span class="hljs-literal">-name</span> appBackendPool
+
+<span class="hljs-comment"># Check VNet peering status</span>
+az network vnet peering list -<span class="hljs-literal">-resource</span><span class="hljs-literal">-group</span> azureprompt_dp -<span class="hljs-literal">-vnet</span><span class="hljs-literal">-name</span> kvstore<span class="hljs-literal">-vnet</span><span class="hljs-literal">-westus2</span>
+
+<span class="hljs-comment"># Test connectivity from peered VNet</span>
+./KVClient <span class="hljs-number">10.0</span>.<span class="hljs-number">0.4</span>:<span class="hljs-number">8085</span>  <span class="hljs-comment"># or :8086 for NUMA node 1</span>
+</div></code></pre>
+
+</body>
+</html>

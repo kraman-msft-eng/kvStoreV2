@@ -17,7 +17,7 @@ def parse_csv(csv_content):
     reader = csv.DictReader(lines)
     data = []
     for row in reader:
-        data.append({
+        entry = {
             'processes': int(row['processes']),
             'concurrency': int(row['concurrency_per_process']),
             'total_concurrency': int(row['total_concurrency']),
@@ -26,10 +26,13 @@ def parse_csv(csv_content):
             'lookup_p50': float(row['lookup_p50_ms']),
             'lookup_p90': float(row['lookup_p90_ms']),
             'lookup_p99': float(row['lookup_p99_ms']),
+            'lookup_p100': float(row.get('lookup_p100_ms', 0)),
             'read_p50': float(row['read_p50_ms']),
             'read_p90': float(row['read_p90_ms']),
             'read_p99': float(row['read_p99_ms']),
-        })
+            'read_p100': float(row.get('read_p100_ms', 0)),
+        }
+        data.append(entry)
     return data
 
 def generate_chart_html(data, output_file):
@@ -46,10 +49,12 @@ def generate_chart_html(data, output_file):
     lookup_p50 = [d['lookup_p50'] for d in data_sorted]
     lookup_p90 = [d['lookup_p90'] for d in data_sorted]
     lookup_p99 = [d['lookup_p99'] for d in data_sorted]
+    lookup_p100 = [d['lookup_p100'] for d in data_sorted]
     
     read_p50 = [d['read_p50'] for d in data_sorted]
     read_p90 = [d['read_p90'] for d in data_sorted]
     read_p99 = [d['read_p99'] for d in data_sorted]
+    read_p100 = [d['read_p100'] for d in data_sorted]
     
     html = f'''<!DOCTYPE html>
 <html>
@@ -97,9 +102,11 @@ def generate_chart_html(data, output_file):
             <th>Lookup p50</th>
             <th>Lookup p90</th>
             <th>Lookup p99</th>
+            <th>Lookup p100</th>
             <th>Read p50</th>
             <th>Read p90</th>
             <th>Read p99</th>
+            <th>Read p100</th>
         </tr>
 '''
     
@@ -111,9 +118,11 @@ def generate_chart_html(data, output_file):
             <td>{d['lookup_p50']:.2f}ms</td>
             <td>{d['lookup_p90']:.2f}ms</td>
             <td>{d['lookup_p99']:.2f}ms</td>
+            <td>{d['lookup_p100']:.2f}ms</td>
             <td>{d['read_p50']:.2f}ms</td>
             <td>{d['read_p90']:.2f}ms</td>
             <td>{d['read_p99']:.2f}ms</td>
+            <td>{d['read_p100']:.2f}ms</td>
         </tr>
 '''
     
@@ -153,6 +162,15 @@ def generate_chart_html(data, output_file):
                         backgroundColor: 'rgba(255,71,87,0.1)',
                         tension: 0.3,
                         pointRadius: 6
+                    }},
+                    {{
+                        label: 'p100 (max)',
+                        data: {lookup_p100},
+                        borderColor: '#8b0000',
+                        backgroundColor: 'rgba(139,0,0,0.1)',
+                        tension: 0.3,
+                        pointRadius: 6,
+                        borderDash: [5, 5]
                     }}
                 ]
             }},
@@ -207,6 +225,15 @@ def generate_chart_html(data, output_file):
                         backgroundColor: 'rgba(150,206,180,0.1)',
                         tension: 0.3,
                         pointRadius: 6
+                    }},
+                    {{
+                        label: 'p100 (max)',
+                        data: {read_p100},
+                        borderColor: '#006400',
+                        backgroundColor: 'rgba(0,100,0,0.1)',
+                        tension: 0.3,
+                        pointRadius: 6,
+                        borderDash: [5, 5]
                     }}
                 ]
             }},
