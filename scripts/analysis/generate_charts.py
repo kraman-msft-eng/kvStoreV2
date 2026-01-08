@@ -38,23 +38,40 @@ def parse_csv(csv_content):
 def generate_chart_html(data, output_file):
     """Generate an HTML file with interactive charts using Chart.js"""
     
-    # Sort by tokens per second
-    data_sorted = sorted(data, key=lambda x: x['tokens_per_sec'])
+    # Sort by concurrency for throughput chart (monotonically increasing)
+    data_by_concurrency = sorted(data, key=lambda x: x['total_concurrency'])
     
-    # Prepare data arrays
-    labels = [f"{d['total_concurrency']}c" for d in data_sorted]
-    tokens_k = [d['tokens_per_sec'] / 1_000 for d in data_sorted]
-    tps = [d['tps'] for d in data_sorted]
+    # For latency vs throughput: sort by throughput to show peak and falloff
+    # Find peak throughput and mark it
+    peak_tps = max(d['tokens_per_sec'] for d in data)
+    peak_entry = next(d for d in data if d['tokens_per_sec'] == peak_tps)
     
-    lookup_p50 = [d['lookup_p50'] for d in data_sorted]
-    lookup_p90 = [d['lookup_p90'] for d in data_sorted]
-    lookup_p99 = [d['lookup_p99'] for d in data_sorted]
-    lookup_p100 = [d['lookup_p100'] for d in data_sorted]
+    # Prepare data arrays for throughput chart (sorted by concurrency)
+    labels = [f"{d['total_concurrency']}c" for d in data_by_concurrency]
+    tokens_k = [d['tokens_per_sec'] / 1_000 for d in data_by_concurrency]
+    tps = [d['tps'] for d in data_by_concurrency]
     
-    read_p50 = [d['read_p50'] for d in data_sorted]
-    read_p90 = [d['read_p90'] for d in data_sorted]
-    read_p99 = [d['read_p99'] for d in data_sorted]
-    read_p100 = [d['read_p100'] for d in data_sorted]
+    # For latency charts: only include data up to peak (exclude falloff)
+    # Sort by concurrency first, then filter to only include up to peak concurrency
+    data_up_to_peak = [d for d in data_by_concurrency if d['total_concurrency'] <= peak_entry['total_concurrency']]
+    # Now sort by throughput for proper line drawing
+    data_for_latency = sorted(data_up_to_peak, key=lambda x: x['tokens_per_sec'])
+    
+    lookup_p50 = [d['lookup_p50'] for d in data_for_latency]
+    lookup_p90 = [d['lookup_p90'] for d in data_for_latency]
+    lookup_p99 = [d['lookup_p99'] for d in data_for_latency]
+    lookup_p100 = [d['lookup_p100'] for d in data_for_latency]
+    throughput_for_latency = [d['tokens_per_sec'] / 1_000 for d in data_for_latency]
+    concurrency_labels = [d['total_concurrency'] for d in data_for_latency]
+    
+    read_p50 = [d['read_p50'] for d in data_for_latency]
+    read_p90 = [d['read_p90'] for d in data_for_latency]
+    read_p99 = [d['read_p99'] for d in data_for_latency]
+    read_p100 = [d['read_p100'] for d in data_for_latency]
+    
+    # Peak throughput info
+    peak_tokens_k = peak_entry['tokens_per_sec'] / 1_000
+    peak_concurrency = peak_entry['total_concurrency']
     
     html = f'''<!DOCTYPE html>
 <html>
@@ -110,7 +127,8 @@ def generate_chart_html(data, output_file):
         </tr>
 '''
     
-    for d in data_sorted:
+    # Table sorted by concurrency
+    for d in data_by_concurrency:
         html += f'''        <tr>
             <td>{d['total_concurrency']}</td>
             <td>{d['tps']:.1f}</td>
@@ -132,42 +150,54 @@ def generate_chart_html(data, output_file):
         const labels = {labels};
         const tokensK = {tokens_k};
         const tps = {tps};
+        const throughputForLatency = {throughput_for_latency};
+        const concurrencyLabels = {concurrency_labels};
+        const peakTokensK = {peak_tokens_k};
+        const peakConcurrency = {peak_concurrency};
         
-        // Lookup Chart
+        // Create scatter data for latency charts
+        function makeScatterData(latencies) {{
+            return throughputForLatency.map((x, i) => ({{ x: x, y: latencies[i] }}));
+        }}
+        
+        // Lookup Chart - scatter plot with throughput on X-axis
         new Chart(document.getElementById('lookupChart'), {{
-            type: 'line',
+            type: 'scatter',
             data: {{
-                labels: tokensK.map(t => t.toFixed(1) + 'K'),
                 datasets: [
                     {{
                         label: 'p50',
-                        data: {lookup_p50},
+                        data: makeScatterData({lookup_p50}),
                         borderColor: '#ff6b6b',
-                        backgroundColor: 'rgba(255,107,107,0.1)',
+                        backgroundColor: 'rgba(255,107,107,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     }},
                     {{
                         label: 'p90',
-                        data: {lookup_p90},
+                        data: makeScatterData({lookup_p90}),
                         borderColor: '#ffa502',
-                        backgroundColor: 'rgba(255,165,2,0.1)',
+                        backgroundColor: 'rgba(255,165,2,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     }},
                     {{
                         label: 'p99',
-                        data: {lookup_p99},
+                        data: makeScatterData({lookup_p99}),
                         borderColor: '#ff4757',
-                        backgroundColor: 'rgba(255,71,87,0.1)',
+                        backgroundColor: 'rgba(255,71,87,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     }},
                     {{
                         label: 'p100 (max)',
-                        data: {lookup_p100},
+                        data: makeScatterData({lookup_p100}),
                         borderColor: '#8b0000',
-                        backgroundColor: 'rgba(139,0,0,0.1)',
+                        backgroundColor: 'rgba(139,0,0,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6,
                         borderDash: [5, 5]
@@ -177,14 +207,24 @@ def generate_chart_html(data, output_file):
             options: {{
                 responsive: true,
                 plugins: {{
-                    title: {{ display: true, text: 'Lookup Latency vs Token Throughput', color: '#eee' }},
-                    legend: {{ labels: {{ color: '#eee' }} }}
+                    title: {{ display: true, text: 'Lookup Latency vs Token Throughput (Peak: ' + peakTokensK.toFixed(1) + 'K @ ' + peakConcurrency + 'c)', color: '#eee' }},
+                    legend: {{ labels: {{ color: '#eee' }} }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                const idx = context.dataIndex;
+                                return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + 'ms @ ' + context.parsed.x.toFixed(1) + 'K tokens/s (C=' + concurrencyLabels[idx] + ')';
+                            }}
+                        }}
+                    }}
                 }},
                 scales: {{
                     x: {{ 
                         title: {{ display: true, text: 'Token Throughput (K tokens/sec)', color: '#eee' }},
                         ticks: {{ color: '#aaa' }},
-                        grid: {{ color: '#333' }}
+                        grid: {{ color: '#333' }},
+                        type: 'linear',
+                        position: 'bottom'
                     }},
                     y: {{ 
                         title: {{ display: true, text: 'Latency (ms)', color: '#eee' }},
@@ -196,41 +236,44 @@ def generate_chart_html(data, output_file):
             }}
         }});
         
-        // Read Chart
+        // Read Chart - scatter plot with throughput on X-axis
         new Chart(document.getElementById('readChart'), {{
-            type: 'line',
+            type: 'scatter',
             data: {{
-                labels: tokensK.map(t => t.toFixed(1) + 'K'),
                 datasets: [
                     {{
                         label: 'p50',
-                        data: {read_p50},
+                        data: makeScatterData({read_p50}),
                         borderColor: '#4ecdc4',
-                        backgroundColor: 'rgba(78,205,196,0.1)',
+                        backgroundColor: 'rgba(78,205,196,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     }},
                     {{
                         label: 'p90',
-                        data: {read_p90},
+                        data: makeScatterData({read_p90}),
                         borderColor: '#45b7d1',
-                        backgroundColor: 'rgba(69,183,209,0.1)',
+                        backgroundColor: 'rgba(69,183,209,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     }},
                     {{
                         label: 'p99',
-                        data: {read_p99},
+                        data: makeScatterData({read_p99}),
                         borderColor: '#96ceb4',
-                        backgroundColor: 'rgba(150,206,180,0.1)',
+                        backgroundColor: 'rgba(150,206,180,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     }},
                     {{
                         label: 'p100 (max)',
-                        data: {read_p100},
+                        data: makeScatterData({read_p100}),
                         borderColor: '#006400',
-                        backgroundColor: 'rgba(0,100,0,0.1)',
+                        backgroundColor: 'rgba(0,100,0,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6,
                         borderDash: [5, 5]
@@ -240,14 +283,24 @@ def generate_chart_html(data, output_file):
             options: {{
                 responsive: true,
                 plugins: {{
-                    title: {{ display: true, text: 'Read Latency vs Token Throughput', color: '#eee' }},
-                    legend: {{ labels: {{ color: '#eee' }} }}
+                    title: {{ display: true, text: 'Read Latency vs Token Throughput (Peak: ' + peakTokensK.toFixed(1) + 'K @ ' + peakConcurrency + 'c)', color: '#eee' }},
+                    legend: {{ labels: {{ color: '#eee' }} }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                const idx = context.dataIndex;
+                                return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + 'ms @ ' + context.parsed.x.toFixed(1) + 'K tokens/s (C=' + concurrencyLabels[idx] + ')';
+                            }}
+                        }}
+                    }}
                 }},
                 scales: {{
                     x: {{ 
                         title: {{ display: true, text: 'Token Throughput (K tokens/sec)', color: '#eee' }},
                         ticks: {{ color: '#aaa' }},
-                        grid: {{ color: '#333' }}
+                        grid: {{ color: '#333' }},
+                        type: 'linear',
+                        position: 'bottom'
                     }},
                     y: {{ 
                         title: {{ display: true, text: 'Latency (ms)', color: '#eee' }},

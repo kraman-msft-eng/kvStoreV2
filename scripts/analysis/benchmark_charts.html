@@ -142,19 +142,6 @@
             <td>202.56ms</td>
         </tr>
         <tr>
-            <td>80</td>
-            <td>79.8</td>
-            <td>91.9</td>
-            <td>6.03ms</td>
-            <td>13.01ms</td>
-            <td>36.24ms</td>
-            <td>98.73ms</td>
-            <td>59.21ms</td>
-            <td>121.87ms</td>
-            <td>173.29ms</td>
-            <td>211.64ms</td>
-        </tr>
-        <tr>
             <td>64</td>
             <td>81.2</td>
             <td>93.5</td>
@@ -167,48 +154,73 @@
             <td>138.14ms</td>
             <td>205.24ms</td>
         </tr>
+        <tr>
+            <td>80</td>
+            <td>79.8</td>
+            <td>91.9</td>
+            <td>6.03ms</td>
+            <td>13.01ms</td>
+            <td>36.24ms</td>
+            <td>98.73ms</td>
+            <td>59.21ms</td>
+            <td>121.87ms</td>
+            <td>173.29ms</td>
+            <td>211.64ms</td>
+        </tr>
     </table>
     
     <script>
-        const labels = ['1c', '2c', '4c', '6c', '8c', '16c', '32c', '80c', '64c'];
-        const tokensK = [4.0896, 8.04096, 16.25472, 24.122880000000002, 32.40576, 50.83776, 75.98592, 91.872, 93.50784];
-        const tps = [3.55, 6.98, 14.11, 20.94, 28.13, 44.13, 65.96, 79.75, 81.17];
+        const labels = ['1c', '2c', '4c', '6c', '8c', '16c', '32c', '64c', '80c'];
+        const tokensK = [4.0896, 8.04096, 16.25472, 24.122880000000002, 32.40576, 50.83776, 75.98592, 93.50784, 91.872];
+        const tps = [3.55, 6.98, 14.11, 20.94, 28.13, 44.13, 65.96, 81.17, 79.75];
+        const throughputForLatency = [4.0896, 8.04096, 16.25472, 24.122880000000002, 32.40576, 50.83776, 75.98592, 93.50784];
+        const concurrencyLabels = [1, 2, 4, 6, 8, 16, 32, 64];
+        const peakTokensK = 93.50784;
+        const peakConcurrency = 64;
         
-        // Lookup Chart
+        // Create scatter data for latency charts
+        function makeScatterData(latencies) {
+            return throughputForLatency.map((x, i) => ({ x: x, y: latencies[i] }));
+        }
+        
+        // Lookup Chart - scatter plot with throughput on X-axis
         new Chart(document.getElementById('lookupChart'), {
-            type: 'line',
+            type: 'scatter',
             data: {
-                labels: tokensK.map(t => t.toFixed(1) + 'K'),
                 datasets: [
                     {
                         label: 'p50',
-                        data: [5.72, 5.43, 5.21, 5.06, 5.06, 5.0, 4.95, 6.03, 5.56],
+                        data: makeScatterData([5.72, 5.43, 5.21, 5.06, 5.06, 5.0, 4.95, 5.56]),
                         borderColor: '#ff6b6b',
-                        backgroundColor: 'rgba(255,107,107,0.1)',
+                        backgroundColor: 'rgba(255,107,107,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     },
                     {
                         label: 'p90',
-                        data: [8.76, 8.44, 8.02, 7.86, 7.66, 7.5, 6.69, 13.01, 8.95],
+                        data: makeScatterData([8.76, 8.44, 8.02, 7.86, 7.66, 7.5, 6.69, 8.95]),
                         borderColor: '#ffa502',
-                        backgroundColor: 'rgba(255,165,2,0.1)',
+                        backgroundColor: 'rgba(255,165,2,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     },
                     {
                         label: 'p99',
-                        data: [11.51, 11.14, 10.76, 11.21, 10.77, 12.81, 11.54, 36.24, 21.0],
+                        data: makeScatterData([11.51, 11.14, 10.76, 11.21, 10.77, 12.81, 11.54, 21.0]),
                         borderColor: '#ff4757',
-                        backgroundColor: 'rgba(255,71,87,0.1)',
+                        backgroundColor: 'rgba(255,71,87,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     },
                     {
                         label: 'p100 (max)',
-                        data: [64.5, 39.27, 43.61, 33.78, 38.16, 63.43, 101.35, 98.73, 100.5],
+                        data: makeScatterData([64.5, 39.27, 43.61, 33.78, 38.16, 63.43, 101.35, 100.5]),
                         borderColor: '#8b0000',
-                        backgroundColor: 'rgba(139,0,0,0.1)',
+                        backgroundColor: 'rgba(139,0,0,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6,
                         borderDash: [5, 5]
@@ -218,14 +230,24 @@
             options: {
                 responsive: true,
                 plugins: {
-                    title: { display: true, text: 'Lookup Latency vs Token Throughput', color: '#eee' },
-                    legend: { labels: { color: '#eee' } }
+                    title: { display: true, text: 'Lookup Latency vs Token Throughput (Peak: ' + peakTokensK.toFixed(1) + 'K @ ' + peakConcurrency + 'c)', color: '#eee' },
+                    legend: { labels: { color: '#eee' } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const idx = context.dataIndex;
+                                return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + 'ms @ ' + context.parsed.x.toFixed(1) + 'K tokens/s (C=' + concurrencyLabels[idx] + ')';
+                            }
+                        }
+                    }
                 },
                 scales: {
                     x: { 
                         title: { display: true, text: 'Token Throughput (K tokens/sec)', color: '#eee' },
                         ticks: { color: '#aaa' },
-                        grid: { color: '#333' }
+                        grid: { color: '#333' },
+                        type: 'linear',
+                        position: 'bottom'
                     },
                     y: { 
                         title: { display: true, text: 'Latency (ms)', color: '#eee' },
@@ -237,41 +259,44 @@
             }
         });
         
-        // Read Chart
+        // Read Chart - scatter plot with throughput on X-axis
         new Chart(document.getElementById('readChart'), {
-            type: 'line',
+            type: 'scatter',
             data: {
-                labels: tokensK.map(t => t.toFixed(1) + 'K'),
                 datasets: [
                     {
                         label: 'p50',
-                        data: [19.67, 19.76, 20.22, 20.64, 20.85, 22.71, 27.13, 59.21, 40.28],
+                        data: makeScatterData([19.67, 19.76, 20.22, 20.64, 20.85, 22.71, 27.13, 40.28]),
                         borderColor: '#4ecdc4',
-                        backgroundColor: 'rgba(78,205,196,0.1)',
+                        backgroundColor: 'rgba(78,205,196,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     },
                     {
                         label: 'p90',
-                        data: [21.57, 21.95, 22.56, 23.21, 23.74, 27.84, 42.12, 121.87, 77.29],
+                        data: makeScatterData([21.57, 21.95, 22.56, 23.21, 23.74, 27.84, 42.12, 77.29]),
                         borderColor: '#45b7d1',
-                        backgroundColor: 'rgba(69,183,209,0.1)',
+                        backgroundColor: 'rgba(69,183,209,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     },
                     {
                         label: 'p99',
-                        data: [24.43, 24.77, 33.38, 36.25, 33.66, 55.52, 88.24, 173.29, 138.14],
+                        data: makeScatterData([24.43, 24.77, 33.38, 36.25, 33.66, 55.52, 88.24, 138.14]),
                         borderColor: '#96ceb4',
-                        backgroundColor: 'rgba(150,206,180,0.1)',
+                        backgroundColor: 'rgba(150,206,180,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6
                     },
                     {
                         label: 'p100 (max)',
-                        data: [27.78, 33.03, 50.35, 63.64, 85.02, 124.12, 202.56, 211.64, 205.24],
+                        data: makeScatterData([27.78, 33.03, 50.35, 63.64, 85.02, 124.12, 202.56, 205.24]),
                         borderColor: '#006400',
-                        backgroundColor: 'rgba(0,100,0,0.1)',
+                        backgroundColor: 'rgba(0,100,0,0.5)',
+                        showLine: true,
                         tension: 0.3,
                         pointRadius: 6,
                         borderDash: [5, 5]
@@ -281,14 +306,24 @@
             options: {
                 responsive: true,
                 plugins: {
-                    title: { display: true, text: 'Read Latency vs Token Throughput', color: '#eee' },
-                    legend: { labels: { color: '#eee' } }
+                    title: { display: true, text: 'Read Latency vs Token Throughput (Peak: ' + peakTokensK.toFixed(1) + 'K @ ' + peakConcurrency + 'c)', color: '#eee' },
+                    legend: { labels: { color: '#eee' } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const idx = context.dataIndex;
+                                return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + 'ms @ ' + context.parsed.x.toFixed(1) + 'K tokens/s (C=' + concurrencyLabels[idx] + ')';
+                            }
+                        }
+                    }
                 },
                 scales: {
                     x: { 
                         title: { display: true, text: 'Token Throughput (K tokens/sec)', color: '#eee' },
                         ticks: { color: '#aaa' },
-                        grid: { color: '#333' }
+                        grid: { color: '#333' },
+                        type: 'linear',
+                        position: 'bottom'
                     },
                     y: { 
                         title: { display: true, text: 'Latency (ms)', color: '#eee' },
