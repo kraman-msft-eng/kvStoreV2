@@ -71,9 +71,23 @@ $timestamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
 $configOutputDir = Join-Path $PSScriptRoot "..\..\config\$RegionName"
 $regionConfigFile = Join-Path $configOutputDir "region.config.json"
 
+# Region abbreviation map for resource names with length limits
+$regionAbbrev = @{
+    "westus2" = "wus2"
+    "eastus" = "eus"
+    "eastus2" = "eus2"
+    "southcentralus" = "scus"
+    "northcentralus" = "ncus"
+    "westus" = "wus"
+    "centralus" = "cus"
+    "westeurope" = "weu"
+    "northeurope" = "neu"
+}
+$regionShort = if ($regionAbbrev.ContainsKey($RegionName)) { $regionAbbrev[$RegionName] } else { $RegionName.Substring(0, [Math]::Min(8, $RegionName.Length)) }
+
 # Naming conventions
 $uamiName = "kvstore-svc-$RegionName"
-$keyVaultName = "kvstore-kv-$RegionName"
+$keyVaultName = "kvstore-kv-$regionShort"  # Max 24 chars
 $vnetName = "kvstore-vnet-$RegionName"
 $subnetName = "kvstore-subnet"
 $nsgName = "kvstore-nsg-$RegionName"
@@ -296,14 +310,18 @@ if ($LASTEXITCODE -ne 0) {
         --location $RegionName `
         --output none
     Write-Host "Created NSG: $nsgName"
+    # Fetch the newly created NSG
+    $nsgJson = az network nsg show --name $nsgName --resource-group $ResourceGroupName
 } else {
     Write-Host "NSG already exists: $nsgName"
-    $nsgJson = az network nsg show --name $nsgName --resource-group $ResourceGroupName
 }
 
 # Ensure NSG rules exist (idempotent - check before create)
 $nsg = $nsgJson | ConvertFrom-Json
-$existingRules = @($nsg.securityRules | ForEach-Object { $_.name })
+$existingRules = @()
+if ($nsg.securityRules) {
+    $existingRules = @($nsg.securityRules | ForEach-Object { $_.name })
+}
 
 # Port 8085: NUMA Node 0 process
 if ($existingRules -notcontains "Allow-gRPC-8085") {

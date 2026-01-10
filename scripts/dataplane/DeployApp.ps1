@@ -60,6 +60,62 @@ $regionConfig = Get-Content $regionConfigFile -Raw | ConvertFrom-Json
 $clusterConfig = Get-Content $clusterConfigFile -Raw | ConvertFrom-Json
 
 # ============================================================================
+# Ensure Client Certificate is Installed
+# ============================================================================
+$clientCertThumbprint = $clusterConfig.cluster.clientCertThumbprint
+$existingCert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $clientCertThumbprint }
+if (-not $existingCert) {
+    Write-Host "Client certificate not found in store, downloading from Key Vault..."
+    $keyVaultName = $regionConfig.keyVault.name
+    $clientCertName = $regionConfig.keyVault.clientCertName
+    $pfxPath = Join-Path $env:TEMP "$clientCertName.pfx"
+    
+    try {
+        $secretId = az keyvault certificate show --vault-name $keyVaultName --name $clientCertName --query "sid" -o tsv
+        az keyvault secret download --id $secretId --file $pfxPath --encoding base64
+        Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Exportable | Out-Null
+        Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+        Write-Host "  Imported client certificate: $clientCertThumbprint"
+    } catch {
+        throw "Failed to download/import client certificate from Key Vault: $_"
+    }
+} else {
+    Write-Host "Client certificate already installed: $clientCertThumbprint"
+}
+
+# ============================================================================
+# Ensure NSG allows SF management from this machine
+# ============================================================================
+$sfInfraRg = $clusterConfig.azure.infraResourceGroupName
+if ($sfInfraRg) {
+    try {
+        $myPublicIp = (Invoke-WebRequest -Uri "https://api.ipify.org" -UseBasicParsing -TimeoutSec 10).Content.Trim()
+        if ($myPublicIp -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') {
+            $sfNsgName = "SF-NSG"
+            $sfMgmtRuleName = "AllowSFMgmt-Deploy"
+            
+            # Check if rule exists and update if IP changed
+            $existingRuleJson = az network nsg rule show --resource-group $sfInfraRg --nsg-name $sfNsgName --name $sfMgmtRuleName 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                $existingRule = $existingRuleJson | ConvertFrom-Json
+                $existingIps = $existingRule.sourceAddressPrefixes -join ","
+                if ($existingIps -notlike "*$myPublicIp*") {
+                    # Add our IP to existing rule
+                    $newIps = @($existingRule.sourceAddressPrefixes) + "$myPublicIp/32" | Select-Object -Unique
+                    az network nsg rule update --resource-group $sfInfraRg --nsg-name $sfNsgName --name $sfMgmtRuleName --source-address-prefixes $newIps --output none 2>$null
+                    Write-Host "  Updated SF management NSG rule to include $myPublicIp"
+                }
+            } else {
+                az network nsg rule create --resource-group $sfInfraRg --nsg-name $sfNsgName --name $sfMgmtRuleName --priority 100 --source-address-prefixes "$myPublicIp/32" --destination-port-ranges 19000 19080 --access Allow --protocol Tcp --direction Inbound --output none 2>$null
+                Write-Host "  Created SF management NSG rule for $myPublicIp"
+            }
+        }
+    } catch {
+        Write-Host "  Warning: Could not verify/update SF management NSG rule (non-fatal)" -ForegroundColor Yellow
+    }
+}
+
+# ============================================================================
 # Paths
 # ============================================================================
 $repoRoot = Join-Path $PSScriptRoot "../.."

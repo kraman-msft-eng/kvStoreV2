@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ServiceManifest Name="KVStoreServerNode1Pkg" Version="1.0.31" xmlns="http://schemas.microsoft.com/2011/01/fabric" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ServiceManifest Name="KVStoreServerNode1Pkg" Version="1.0.35" xmlns="http://schemas.microsoft.com/2011/01/fabric" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Description>KVStore Server Service Package - NUMA Node 1 (Port 8086)</Description>
   
   <ServiceTypes>
     <StatelessServiceType ServiceTypeName="KVStoreServerNode1Type" UseImplicitHost="true" />
   </ServiceTypes>
   
-  <CodePackage Name="Code" Version="1.0.31">
+  <CodePackage Name="Code" Version="1.0.35">
     <EntryPoint>
       <ExeHost>
         <Program>start.cmd</Program>
@@ -35,6 +35,10 @@
     </Endpoints>
   </Resources>
 </ServiceManifest>
+
+
+
+
 
 
 
